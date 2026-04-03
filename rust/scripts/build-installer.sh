@@ -14,6 +14,7 @@ INNO_IMAGE="${INNO_SETUP_IMAGE:-amake/innosetup}"
 CONTAINER_NAME="codexbar-inno-${VERSION//./-}-$$"
 VC_REDIST_URL="${VC_REDIST_URL:-https://aka.ms/vc14/vc_redist.x64.exe}"
 VC_REDIST_PATH="$INSTALLER_DEPS_DIR/vc_redist.x64.exe"
+VC_REDIST_SHA256="${VC_REDIST_SHA256:-}"
 
 for required_file in "$TARGET_BIN_DIR/codexbar.exe" "$RUST_DIR/icons/icon.ico"; do
   if [[ ! -f "$required_file" ]]; then
@@ -26,7 +27,22 @@ done
 mkdir -p "$OUTPUT_DIR"
 mkdir -p "$INSTALLER_DEPS_DIR"
 
+if [[ -z "$VC_REDIST_SHA256" ]]; then
+  echo "VC_REDIST_SHA256 must be set to the expected SHA-256 for vc_redist.x64.exe" >&2
+  exit 1
+fi
+
 curl -L "$VC_REDIST_URL" -o "$VC_REDIST_PATH"
+
+ACTUAL_SHA256="$(sha256sum "$VC_REDIST_PATH" | awk '{print tolower($1)}')"
+EXPECTED_SHA256="$(printf '%s' "$VC_REDIST_SHA256" | tr '[:upper:]' '[:lower:]')"
+
+if [[ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]]; then
+  echo "VC++ redistributable checksum mismatch" >&2
+  echo "Expected: $EXPECTED_SHA256" >&2
+  echo "Actual:   $ACTUAL_SHA256" >&2
+  exit 1
+fi
 
 cleanup() {
   docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true

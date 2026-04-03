@@ -218,7 +218,7 @@ pub struct Settings {
     pub global_shortcut: String,
 
     /// Automatically download updates in the background
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub auto_download_updates: bool,
 
     /// Install pending updates when quitting the application
@@ -228,10 +228,6 @@ pub struct Settings {
     /// UI language for the application (English default for backward compatibility)
     #[serde(default)]
     pub ui_language: Language,
-}
-
-fn default_true() -> bool {
-    true
 }
 
 fn default_global_shortcut() -> String {
@@ -267,7 +263,7 @@ impl Default for Settings {
             update_channel: UpdateChannel::default(), // Stable by default
             provider_metrics: HashMap::new(), // Empty = use Automatic for all
             global_shortcut: default_global_shortcut(), // Ctrl+Shift+U by default
-            auto_download_updates: true, // Auto-download updates by default
+            auto_download_updates: false, // Auto-download updates only when explicitly enabled
             install_updates_on_quit: false, // Don't auto-install on quit by default
             ui_language: Language::default(), // English by default
         }
@@ -929,6 +925,24 @@ mod tests {
             serde_json::from_str(&content).expect("Failed to deserialize settings");
 
         assert_eq!(loaded.ui_language, Language::Chinese);
+    }
+
+    #[test]
+    fn test_auto_download_updates_defaults_to_false() {
+        let settings = Settings::default();
+        assert!(!settings.auto_download_updates);
+    }
+
+    #[test]
+    fn test_settings_load_missing_auto_download_field_defaults_to_false() {
+        let legacy_json = r#"{
+            "enabled_providers": ["claude", "codex"],
+            "refresh_interval_secs": 300,
+            "start_minimized": false
+        }"#;
+
+        let settings: Settings = serde_json::from_str(legacy_json).expect("settings");
+        assert!(!settings.auto_download_updates);
     }
 
     #[test]

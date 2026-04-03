@@ -53,6 +53,20 @@ jobs:
             -Uri "https://aka.ms/vc14/vc_redist.x64.exe" `
             -OutFile "rust\target\installer-deps\vc_redist.x64.exe"
 
+          $signature = Get-AuthenticodeSignature "rust\target\installer-deps\vc_redist.x64.exe"
+          if ($signature.Status -ne 'Valid') {
+            throw "VC++ redistributable Authenticode signature is not valid: $($signature.Status)"
+          }
+          if (-not $signature.SignerCertificate) {
+            throw "VC++ redistributable is missing a signer certificate"
+          }
+
+          $expectedSigner = "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+          $actualSigner = $signature.SignerCertificate.Subject
+          if ($actualSigner -ne $expectedSigner) {
+            throw "Unexpected VC++ redistributable signer: $actualSigner"
+          }
+
       - name: Build installer
         shell: pwsh
         run: |

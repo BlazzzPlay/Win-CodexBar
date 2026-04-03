@@ -58,39 +58,11 @@ impl KiroProvider {
         }
     }
 
-    /// Find Kiro CLI binary
-    fn which_kiro() -> Option<PathBuf> {
-        // Try kiro-cli first (the official CLI name)
-        if let Ok(path) = which::which("kiro-cli") {
-            return Some(path);
-        }
-        // Fall back to kiro
-        if let Ok(path) = which::which("kiro") {
-            return Some(path);
-        }
-
-        #[cfg(target_os = "windows")]
-        {
-            let possible_paths = [
-                dirs::data_local_dir()
-                    .map(|p| p.join("Programs").join("Kiro").join("kiro-cli.exe")),
-                Some(PathBuf::from("C:\\Program Files\\Kiro\\kiro-cli.exe")),
-            ];
-            for path in possible_paths.into_iter().flatten() {
-                if path.exists() {
-                    return Some(path);
-                }
-            }
-        }
-
-        None
-    }
-
     /// Check if user is logged in by running `kiro-cli whoami`
     async fn ensure_logged_in(&self) -> Result<(), ProviderError> {
-        let cli_path = Self::which_kiro().ok_or_else(|| {
+        let cli_path = find_kiro_cli().ok_or_else(|| {
             ProviderError::NotInstalled(
-                "kiro-cli not found. Install from https://kiro.dev".to_string(),
+                "kiro-cli not found in a trusted install location. Install from https://kiro.dev or set CODEXBAR_KIRO_CLI_PATH to the full executable path.".to_string(),
             )
         })?;
 
@@ -132,8 +104,11 @@ impl KiroProvider {
         // First ensure we're logged in
         self.ensure_logged_in().await?;
 
-        let cli_path = Self::which_kiro()
-            .ok_or_else(|| ProviderError::NotInstalled("kiro-cli not found".to_string()))?;
+        let cli_path = find_kiro_cli().ok_or_else(|| {
+            ProviderError::NotInstalled(
+                "kiro-cli not found in a trusted install location. Install from https://kiro.dev or set CODEXBAR_KIRO_CLI_PATH to the full executable path.".to_string(),
+            )
+        })?;
 
         // Run the usage command
         #[cfg(windows)]

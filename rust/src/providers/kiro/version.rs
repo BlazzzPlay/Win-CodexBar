@@ -2,6 +2,7 @@
 //!
 //! Detect and parse Kiro CLI version for compatibility checks.
 
+use std::env;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
@@ -13,6 +14,8 @@ static CLI_PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
 
 /// Cached CLI version
 static CLI_VERSION: OnceLock<Option<String>> = OnceLock::new();
+
+const KIRO_CLI_PATH_ENV: &str = "CODEXBAR_KIRO_CLI_PATH";
 
 /// Kiro CLI version info
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -150,33 +153,81 @@ impl Ord for KiroVersion {
 /// Find Kiro CLI binary path
 pub fn find_kiro_cli() -> Option<PathBuf> {
     CLI_PATH
-        .get_or_init(|| {
-            // Try kiro-cli first (the official CLI name)
-            if let Ok(path) = which::which("kiro-cli") {
-                return Some(path);
-            }
-            // Fall back to kiro
-            if let Ok(path) = which::which("kiro") {
-                return Some(path);
-            }
-
-            #[cfg(target_os = "windows")]
-            {
-                let possible_paths = [
-                    dirs::data_local_dir()
-                        .map(|p| p.join("Programs").join("Kiro").join("kiro-cli.exe")),
-                    Some(PathBuf::from("C:\\Program Files\\Kiro\\kiro-cli.exe")),
-                ];
-                for path in possible_paths.into_iter().flatten() {
-                    if path.exists() {
-                        return Some(path);
-                    }
-                }
-            }
-
-            None
-        })
+        .get_or_init(|| resolve_override_path().or_else(find_trusted_install_candidate))
         .clone()
+}
+
+fn resolve_override_path() -> Option<PathBuf> {
+    let override_path = env::var_os(KIRO_CLI_PATH_ENV)?;
+    let candidate = PathBuf::from(override_path);
+    validate_cli_filename(&candidate)?;
+    candidate.is_file().then_some(candidate)
+}
+
+fn find_trusted_install_candidate() -> Option<PathBuf> {
+    trusted_install_candidates()
+        .into_iter()
+        .find(|path| path.is_file())
+}
+
+fn trusted_install_candidates() -> Vec<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        vec![
+            dirs::data_local_dir().map(|p| p.join("Programs").join("Kiro").join("kiro-cli.exe")),
+            dirs::data_local_dir().map(|p| p.join("Programs").join("Kiro").join("kiro.exe")),
+            Some(PathBuf::from(r"C:\Program Files\Kiro\kiro-cli.exe")),
+            Some(PathBuf::from(r"C:\Program Files\Kiro\kiro.exe")),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        vec![
+            dirs::home_dir().map(|p| p.join(".local").join("bin").join("kiro-cli")),
+            dirs::home_dir().map(|p| p.join(".local").join("bin").join("kiro")),
+            Some(PathBuf::from("/usr/local/bin/kiro-cli")),
+            Some(PathBuf::from("/usr/local/bin/kiro")),
+            Some(PathBuf::from("/opt/homebrew/bin/kiro-cli")),
+            Some(PathBuf::from("/opt/homebrew/bin/kiro")),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
+    }
+
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        vec![
+            dirs::home_dir().map(|p| p.join(".local").join("bin").join("kiro-cli")),
+            dirs::home_dir().map(|p| p.join(".local").join("bin").join("kiro")),
+            Some(PathBuf::from("/usr/local/bin/kiro-cli")),
+            Some(PathBuf::from("/usr/local/bin/kiro")),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
+    }
+}
+
+fn validate_cli_filename(path: &std::path::Path) -> Option<()> {
+    let file_name = path.file_name()?.to_str()?;
+    allowed_cli_filenames().contains(&file_name).then_some(())
+}
+
+fn allowed_cli_filenames() -> &'static [&'static str] {
+    #[cfg(target_os = "windows")]
+    {
+        &["kiro-cli.exe", "kiro.exe"]
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        &["kiro-cli", "kiro"]
+    }
 }
 
 /// Detect Kiro CLI version
@@ -253,6 +304,7 @@ pub fn reset_cache() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     #[test]
     fn test_parse_version_simple() {
@@ -322,5 +374,36 @@ mod tests {
         let v = KiroVersion::parse("1.2.3-beta+build").unwrap();
         assert_eq!(v.display(), "1.2.3");
         assert_eq!(v.to_string(), "1.2.3-beta+build");
+    }
+
+    #[test]
+    fn validates_allowed_cli_filenames() {
+        #[cfg(target_os = "windows")]
+        {
+            assert!(
+                validate_cli_filename(Path::new(r"C:\Program Files\Kiro\kiro-cli.exe")).is_some()
+            );
+            assert!(validate_cli_filename(Path::new(r"C:\Program Files\Kiro\kiro.exe")).is_some());
+            assert!(validate_cli_filename(Path::new(r"C:\Program Files\Kiro\cmd.exe")).is_none());
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            assert!(validate_cli_filename(Path::new("/usr/local/bin/kiro-cli")).is_some());
+            assert!(validate_cli_filename(Path::new("/usr/local/bin/kiro")).is_some());
+            assert!(validate_cli_filename(Path::new("/usr/local/bin/bash")).is_none());
+        }
+    }
+
+    #[test]
+    fn trusted_install_candidates_use_expected_filenames() {
+        let candidates = trusted_install_candidates();
+        assert!(!candidates.is_empty());
+        assert!(candidates.iter().all(|path| {
+            path.file_name()
+                .and_then(std::ffi::OsStr::to_str)
+                .map(|name| allowed_cli_filenames().contains(&name))
+                .unwrap_or(false)
+        }));
     }
 }
