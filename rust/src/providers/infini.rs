@@ -1,6 +1,8 @@
 //! Infini AI Coding Plan Provider
 
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 /// Infini AI Coding Plan 用量数据
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,6 +63,81 @@ impl InfiniUsage {
             return 0.0;
         }
         (self.thirty_day.used as f64 / self.thirty_day.quota as f64) * 100.0
+    }
+}
+
+/// Infini API 客户端
+#[derive(Debug, Clone)]
+pub struct InfiniClient {
+    api_key: String,
+    base_url: String,
+    client: Client,
+}
+
+/// Infini API 错误类型
+#[derive(Debug, Error)]
+pub enum InfiniError {
+    #[error("HTTP request failed: {0}")]
+    HttpError(#[from] reqwest::Error),
+
+    #[error("Unauthorized: invalid API key")]
+    Unauthorized,
+
+    #[error("Rate limited: {0}")]
+    RateLimited(String),
+
+    #[error("Server error: {0}")]
+    ServerError(String),
+
+    #[error("Parse error: {0}")]
+    ParseError(String),
+}
+
+impl InfiniClient {
+    pub const DEFAULT_BASE_URL: &'static str = "https://cloud.infini-ai.com";
+
+    pub fn new(api_key: String) -> Self {
+        Self {
+            api_key,
+            base_url: Self::DEFAULT_BASE_URL.to_string(),
+            client: Client::new(),
+        }
+    }
+
+    pub fn with_base_url(mut self, base_url: String) -> Self {
+        self.base_url = base_url;
+        self
+    }
+
+    pub async fn fetch_usage(&self) -> Result<InfiniUsage, InfiniError> {
+        let url = format!("{}/maas/coding/usage", self.base_url);
+
+        let response = self
+            .client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .send()
+            .await?;
+
+        let status = response.status();
+
+        match status.as_u16() {
+            200 => {
+                let text = response.text().await.map_err(|e| InfiniError::ParseError(e.to_string()))?;
+                serde_json::from_str(&text).map_err(|e| InfiniError::ParseError(format!("{}: {}", e, text)))
+            }
+            401 => Err(InfiniError::Unauthorized),
+            429 => {
+                let body = response.text().await.unwrap_or_default();
+                Err(InfiniError::RateLimited(body))
+            }
+            500..=599 => {
+                let body = response.text().await.unwrap_or_default();
+                Err(InfiniError::ServerError(body))
+            }
+            _ => Err(InfiniError::HttpError(response.error_for_status().unwrap_err())),
+        }
     }
 }
 
