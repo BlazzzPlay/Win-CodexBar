@@ -350,9 +350,13 @@ impl Provider for InfiniProvider {
                 // 创建 secondary rate window (7-day)
                 let secondary = RateWindow::new(usage.seven_day_percentage());
 
+                // 创建 tertiary rate window (30-day)
+                let tertiary = RateWindow::new(usage.thirty_day_percentage());
+
                 // 构建使用快照
                 let snapshot = UsageSnapshot::new(primary)
                     .with_secondary(secondary)
+                    .with_tertiary(tertiary)
                     .with_login_method(usage.plan_type().to_string());
 
                 Ok(ProviderFetchResult::new(snapshot, "web"))
