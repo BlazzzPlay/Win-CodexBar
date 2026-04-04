@@ -188,10 +188,25 @@ impl Ord for KiroVersion {
 pub fn find_kiro_cli() -> Option<PathBuf> {
     CLI_PATH
         .get_or_init(|| {
+            // 1. Check explicit environment override first
             if let Some(path) = env_override_cli_path() {
                 return Some(path);
             }
 
+            // 2. Hardened PATH lookup - use which but validate the result
+            //    (avoids CWD hijacking by not executing bare command names)
+            if let Ok(path) = which::which("kiro-cli") {
+                if is_allowed_kiro_binary(&path) {
+                    return Some(path);
+                }
+            }
+            if let Ok(path) = which::which("kiro") {
+                if is_allowed_kiro_binary(&path) {
+                    return Some(path);
+                }
+            }
+
+            // 3. Fall back to known install locations
             #[cfg(target_os = "windows")]
             {
                 let possible_paths = [
