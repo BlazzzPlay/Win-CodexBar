@@ -115,6 +115,11 @@ impl InfiniClient {
         self
     }
 
+    /// Get the configured base URL
+    pub fn base_url(&self) -> &str {
+        &self.base_url
+    }
+
     pub async fn fetch_usage(&self) -> Result<InfiniUsage, InfiniError> {
         let url = format!("{}/maas/coding/usage", self.base_url);
 
@@ -130,8 +135,12 @@ impl InfiniClient {
 
         match status.as_u16() {
             200 => {
-                let text = response.text().await.map_err(|e| InfiniError::ParseError(e.to_string()))?;
-                serde_json::from_str(&text).map_err(|e| InfiniError::ParseError(format!("{}: {}", e, text)))
+                let text = response
+                    .text()
+                    .await
+                    .map_err(|e| InfiniError::ParseError(e.to_string()))?;
+                serde_json::from_str(&text)
+                    .map_err(|e| InfiniError::ParseError(format!("{}: {}", e, text)))
             }
             401 => Err(InfiniError::Unauthorized),
             429 => {
@@ -142,7 +151,9 @@ impl InfiniClient {
                 let body = response.text().await.unwrap_or_default();
                 Err(InfiniError::ServerError(body))
             }
-            _ => Err(InfiniError::HttpError(response.error_for_status().unwrap_err())),
+            _ => Err(InfiniError::HttpError(
+                response.error_for_status().unwrap_err(),
+            )),
         }
     }
 }
@@ -325,21 +336,33 @@ impl Provider for InfiniProvider {
     async fn fetch_usage(&self, ctx: &FetchContext) -> Result<ProviderFetchResult, ProviderError> {
         tracing::debug!("Fetching Infini usage");
 
-        // 优先使用传入的 API Key，否则尝试从环境变量读取
-        let api_key = ctx
-            .api_key
-            .clone()
-            .or_else(Self::read_api_key)
-            .ok_or(ProviderError::AuthRequired)?;
-
-        let client = InfiniClient::new(api_key);
+        // Determine which client to use while preserving the configured base_url
+        let client = if let Some(ref api_key) = ctx.api_key {
+            if api_key.is_empty() {
+                return Err(ProviderError::AuthRequired);
+            }
+            // Use provided key but preserve the base_url from self.client
+            InfiniClient::new(api_key.clone()).with_base_url(self.client.base_url().to_string())
+        } else if let Some(env_key) = Self::read_api_key() {
+            // Use env key but preserve the base_url from self.client
+            InfiniClient::new(env_key).with_base_url(self.client.base_url().to_string())
+        } else if !self.client.api_key.is_empty() {
+            // Use the pre-configured client (has custom base_url if set via with_base_url)
+            self.client.clone()
+        } else {
+            return Err(ProviderError::AuthRequired);
+        };
 
         match ctx.source_mode {
             SourceMode::Auto | SourceMode::Web => {
                 let usage = client.fetch_usage().await.map_err(|e| match e {
                     InfiniError::Unauthorized => ProviderError::AuthRequired,
-                    InfiniError::RateLimited(msg) => ProviderError::Other(format!("Rate limited: {}", msg)),
-                    InfiniError::ServerError(msg) => ProviderError::Other(format!("Server error: {}", msg)),
+                    InfiniError::RateLimited(msg) => {
+                        ProviderError::Other(format!("Rate limited: {}", msg))
+                    }
+                    InfiniError::ServerError(msg) => {
+                        ProviderError::Other(format!("Server error: {}", msg))
+                    }
                     InfiniError::ParseError(msg) => ProviderError::Parse(msg),
                     InfiniError::HttpError(e) => ProviderError::Network(e),
                 })?;
