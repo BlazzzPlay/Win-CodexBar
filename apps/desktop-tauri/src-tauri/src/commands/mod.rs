@@ -412,6 +412,11 @@ pub struct SettingsSnapshot {
     disable_keychain_access: bool,
     show_debug_settings: bool,
     provider_metrics: std::collections::HashMap<String, &'static str>,
+    float_bar_enabled: bool,
+    float_bar_opacity: u8,
+    float_bar_orientation: String,
+    float_bar_click_through: bool,
+    float_bar_provider_ids: Vec<String>,
 }
 
 #[tauri::command]
@@ -481,6 +486,11 @@ impl From<Settings> for SettingsSnapshot {
             disable_keychain_access: settings.disable_keychain_access,
             show_debug_settings: settings.show_debug_settings,
             provider_metrics,
+            float_bar_enabled: settings.float_bar_enabled,
+            float_bar_opacity: settings.float_bar_opacity,
+            float_bar_orientation: settings.float_bar_orientation,
+            float_bar_click_through: settings.float_bar_click_through,
+            float_bar_provider_ids: settings.float_bar_provider_ids,
         }
     }
 }
@@ -923,6 +933,11 @@ pub struct SettingsUpdate {
     pub show_debug_settings: Option<bool>,
     /// Map of provider CLI name → metric preference label.
     pub provider_metrics: Option<std::collections::HashMap<String, String>>,
+    pub float_bar_enabled: Option<bool>,
+    pub float_bar_opacity: Option<u8>,
+    pub float_bar_orientation: Option<String>,
+    pub float_bar_click_through: Option<bool>,
+    pub float_bar_provider_ids: Option<Vec<String>>,
 }
 
 fn parse_tray_icon_mode(s: &str) -> Option<TrayIconMode> {
@@ -950,11 +965,16 @@ fn parse_language(s: &str) -> Option<Language> {
 }
 
 #[tauri::command]
-pub fn update_settings(
+pub async fn update_settings(
     app: tauri::AppHandle,
     patch: SettingsUpdate,
 ) -> Result<SettingsSnapshot, String> {
     let mut settings = Settings::load();
+    let notify_float_bar = patch.enabled_providers.is_some()
+        || patch.refresh_interval_secs.is_some()
+        || patch.high_usage_threshold.is_some()
+        || patch.critical_usage_threshold.is_some();
+    let rebuild_tray_menu = patch.float_bar_enabled.is_some();
 
     // If the shortcut is changing, validate and re-register before persisting.
     if let Some(ref new_shortcut) = patch.global_shortcut
@@ -1073,8 +1093,21 @@ pub fn update_settings(
             }
         }
     }
+    let float_bar_patch = crate::floatbar::SettingsPatch {
+        enabled: patch.float_bar_enabled,
+        opacity: patch.float_bar_opacity,
+        orientation: patch.float_bar_orientation,
+        click_through: patch.float_bar_click_through,
+        provider_ids: patch.float_bar_provider_ids,
+    };
+    float_bar_patch.apply(&mut settings);
 
     settings.save().map_err(|e| e.to_string())?;
+
+    crate::floatbar::after_settings_saved(&app, &float_bar_patch, &settings, notify_float_bar);
+    if rebuild_tray_menu {
+        crate::tray_bridge::rebuild_tray_menu(&app);
+    }
 
     Ok(SettingsSnapshot::from(settings))
 }

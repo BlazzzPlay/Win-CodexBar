@@ -4,6 +4,7 @@ use std::time::Duration;
 
 mod commands;
 mod events;
+mod floatbar;
 mod geometry_store;
 mod proof_harness;
 mod shell;
@@ -113,6 +114,11 @@ fn main() {
             commands::get_locale_strings,
             commands::set_ui_language,
             commands::open_path,
+            floatbar::show_float_bar,
+            floatbar::hide_float_bar,
+            floatbar::set_float_bar_opacity,
+            floatbar::set_float_bar_click_through,
+            floatbar::set_float_bar_orientation,
         ])
         .setup(move |app| {
             if let Some(window) = app.get_webview_window("main") {
@@ -121,6 +127,7 @@ fn main() {
             }
             tray_bridge::setup(app)?;
             shortcut_bridge::register(app.handle());
+            floatbar::install(app.handle());
 
             // In proof mode, show the target surface after a brief delay
             // so WebView2 has time to initialize.
@@ -146,6 +153,9 @@ fn main() {
             Ok(())
         })
         .on_window_event(move |window, event| {
+            if floatbar::handle_window_event(window, event) {
+                return;
+            }
             // Only the main window participates in blur-dismiss and close-to-hide.
             // The detached settings window uses normal OS close behavior.
             if window.label() != "main" {
