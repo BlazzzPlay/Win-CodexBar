@@ -10,8 +10,8 @@ use reqwest::Client;
 use uuid::Uuid;
 
 use crate::core::{
-    FetchContext, Provider, ProviderError, ProviderFetchResult, ProviderId, ProviderMetadata,
-    RateWindow, SourceMode, UsageSnapshot,
+    CostSnapshot, FetchContext, Provider, ProviderError, ProviderFetchResult, ProviderId,
+    ProviderMetadata, RateWindow, SourceMode, UsageSnapshot,
 };
 
 const BASE_URL: &str = "https://opencode.ai";
@@ -215,13 +215,81 @@ impl OpenCodeGoProvider {
             || lower.contains("please sign in")
     }
 
+    fn parse_zen_balance(text: &str) -> Option<f64> {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(text)
+            && let Some(value) = Self::find_balance_value(&json)
+        {
+            return Some(value);
+        }
+        let patterns = [
+            r#"(?i)(?:current\s+balance|zen\s+balance|現在の残高)[^$]{0,80}\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)"#,
+            r#"(?i)(?:balance|残高)[\s\S]{0,120}?\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)"#,
+        ];
+        patterns.iter().find_map(|pattern| {
+            let re = regex_lite::Regex::new(pattern).ok()?;
+            let raw = re.captures(text)?.get(1)?.as_str().replace(',', "");
+            raw.parse::<f64>().ok()
+        })
+    }
+
+    fn find_balance_value(value: &serde_json::Value) -> Option<f64> {
+        match value {
+            serde_json::Value::Object(map) => {
+                for (key, value) in map {
+                    let normalized: String = key
+                        .to_lowercase()
+                        .chars()
+                        .filter(|c| c.is_ascii_alphanumeric())
+                        .collect();
+                    if matches!(
+                        normalized.as_str(),
+                        "zenbalance"
+                            | "zencurrentbalance"
+                            | "currentbalance"
+                            | "currentbalanceusd"
+                            | "balanceusd"
+                            | "usdbalance"
+                    ) {
+                        if let Some(number) = value.as_f64() {
+                            return Some(number);
+                        }
+                        if let Some(text) = value.as_str()
+                            && let Ok(number) = text.trim().replace(',', "").parse()
+                        {
+                            return Some(number);
+                        }
+                    }
+                    if let Some(found) = Self::find_balance_value(value) {
+                        return Some(found);
+                    }
+                }
+                None
+            }
+            serde_json::Value::Array(items) => items.iter().find_map(Self::find_balance_value),
+            _ => None,
+        }
+    }
+
     async fn fetch_with_cookies(
         &self,
         cookie_header: &str,
-    ) -> Result<UsageSnapshot, ProviderError> {
+    ) -> Result<ProviderFetchResult, ProviderError> {
         let workspace_id = self.fetch_workspace_id(cookie_header).await?;
         let page = self.fetch_usage_page(&workspace_id, cookie_header).await?;
-        Self::parse_usage_text(&page)
+        let mut usage = Self::parse_usage_text(&page)?;
+        let balance = Self::parse_zen_balance(&page);
+        if let Some(balance) = balance {
+            usage = usage.with_extra_rate_window(
+                "zen-balance",
+                "Zen balance",
+                RateWindow::with_details(0.0, None, None, Some(format!("${balance:.2}"))),
+            );
+        }
+        let mut result = ProviderFetchResult::new(usage, "web");
+        if let Some(balance) = balance {
+            result = result.with_cost(CostSnapshot::new(balance, "USD", "Zen balance"));
+        }
+        Ok(result)
     }
 }
 
@@ -247,8 +315,7 @@ impl Provider for OpenCodeGoProvider {
         match ctx.source_mode {
             SourceMode::Auto | SourceMode::Web => {
                 if let Some(ref cookie_header) = ctx.manual_cookie_header {
-                    let usage = self.fetch_with_cookies(cookie_header).await?;
-                    return Ok(ProviderFetchResult::new(usage, "web"));
+                    return self.fetch_with_cookies(cookie_header).await;
                 }
 
                 #[cfg(windows)]
@@ -267,9 +334,7 @@ impl Provider for OpenCodeGoProvider {
                                 .join("; ");
                             if !cookie_header.is_empty() {
                                 match self.fetch_with_cookies(&cookie_header).await {
-                                    Ok(usage) => {
-                                        return Ok(ProviderFetchResult::new(usage, "web"));
-                                    }
+                                    Ok(result) => return Ok(result),
                                     Err(ProviderError::AuthRequired) => continue,
                                     Err(e) => return Err(e),
                                 }

@@ -16,6 +16,7 @@ import deepseek from "./icons/ProviderIcon-deepseek.svg?raw";
 import elevenlabs from "./icons/ProviderIcon-elevenlabs.svg?raw";
 import factory from "./icons/ProviderIcon-factory.svg?raw";
 import gemini from "./icons/ProviderIcon-gemini.svg?raw";
+import grok from "./icons/ProviderIcon-grok.svg?raw";
 import groq from "./icons/ProviderIcon-groq.svg?raw";
 import jetbrains from "./icons/ProviderIcon-jetbrains.svg?raw";
 import kilo from "./icons/ProviderIcon-kilo.svg?raw";
@@ -74,6 +75,7 @@ const RAW: Record<string, string> = {
   elevenlabs: tint(elevenlabs),
   factory: tint(factory),
   gemini: tint(gemini),
+  grok: tint(grok),
   groq: tint(groq),
   jetbrains: tint(jetbrains),
   kilo: tint(kilo),
@@ -114,6 +116,7 @@ export const PROVIDER_ICON_REGISTRY: Record<string, ProviderIcon> = {
   elevenlabs:  { id: "elevenlabs",  brandColor: "#111827", fallbackLetter: "E", svgPath: RAW.elevenlabs },
   factory:     { id: "factory",     brandColor: "#ff6b35", fallbackLetter: "◎", svgPath: RAW.factory },
   gemini:      { id: "gemini",      brandColor: "#ab87ea", fallbackLetter: "✦", svgPath: RAW.gemini },
+  grok:        { id: "grok",        brandColor: "#111827", fallbackLetter: "G", svgPath: RAW.grok },
   groq:        { id: "groq",        brandColor: "#f55036", fallbackLetter: "G", svgPath: RAW.groq },
   jetbrains:   { id: "jetbrains",   brandColor: "#ff3399", fallbackLetter: "J", svgPath: RAW.jetbrains },
   kilo:        { id: "kilo",        brandColor: "#5d87ff", fallbackLetter: "K", svgPath: RAW.kilo },
@@ -175,6 +178,10 @@ const ALIASES: Record<string, string> = {
   "step-fun": "stepfun",
   "openai api": "openaiapi",
   "openai-api": "openaiapi",
+  xai: "grok",
+  "x.ai": "grok",
+  supergrok: "grok",
+  "super-grok": "grok",
   "eleven labs": "elevenlabs",
   "eleven-labs": "elevenlabs",
   "11labs": "elevenlabs",

@@ -71,6 +71,7 @@ export type ProofProviderId =
   | "stepfun"
   | "venice"
   | "openaiapi"
+  | "grok"
   | "elevenlabs"
   | "deepgram"
   | "groq"

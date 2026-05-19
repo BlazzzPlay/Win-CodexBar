@@ -4,6 +4,20 @@
 
 ---
 
+## [Windows] 0.27.1 - 2026-05-19
+
+### Added
+- Complete the upstream CodexBar 0.27 provider port for Windows/Tauri by adding Grok billing support, Claude Admin API usage, OpenAI Admin API usage with legacy credit-balance fallback, MiniMax billing summaries, OpenCode Go Zen balance display, and Kiro overage usage/cost parsing.
+- Add Grok across the Rust provider registry, credential migration, token-account support decisions, Settings provider catalog, Tauri provider unions, provider icon registry, and chart colors.
+- Add `codexbar serve` for loopback `/health`, `/usage`, and `/cost` JSON, with loopback Host-header validation.
+- Add the upstream-compatible `--all-accounts` CLI flag surface.
+
+### Fixed
+- Correct the Windows 0.27 line so the release reflects the full portable upstream provider/CLI changes instead of only the API-key quota-provider subset.
+- Update README provider counts and v0.27 notes to describe the full Windows/Tauri port.
+
+---
+
 ## [Windows] 0.27.0 - 2026-05-19
 
 ### Added

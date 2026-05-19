@@ -262,6 +262,22 @@ impl KiroProvider {
             }
         }
 
+        // v0.27: newer Kiro usage output may include overage rows:
+        // "Overages: Enabled", "Credits used: 1.25", "Est. cost: $0.50 USD".
+        let overages_enabled = Regex::new(r"(?i)Overages:\s*([^\n]+)")
+            .ok()
+            .and_then(|re| re.captures(&stripped))
+            .and_then(|caps| caps.get(1).map(|m| m.as_str().trim().to_lowercase()))
+            .is_some_and(|value| value.starts_with("enabled"));
+        let overage_credits_used = Regex::new(r"(?i)Credits used:\s*(\d+\.?\d*)")
+            .ok()
+            .and_then(|re| re.captures(&stripped))
+            .and_then(|caps| caps.get(1)?.as_str().parse::<f64>().ok());
+        let estimated_overage_cost = Regex::new(r"(?i)Est\.\s*cost:\s*\$?(\d+\.?\d*)\s*USD")
+            .ok()
+            .and_then(|re| re.captures(&stripped))
+            .and_then(|caps| caps.get(1)?.as_str().parse::<f64>().ok());
+
         // Managed plans in new format may omit usage metrics
         if matched_new_format && is_managed_plan && !matched_percent && !matched_credits {
             let usage = UsageSnapshot::new(RateWindow::new(0.0)).with_login_method(&plan_name);
@@ -292,6 +308,27 @@ impl KiroProvider {
 
         if let Some(bonus) = bonus_window {
             usage = usage.with_secondary(bonus);
+        }
+        if overages_enabled {
+            if let Some(credits) = overage_credits_used {
+                usage = usage.with_extra_rate_window(
+                    "kiro-overage-credits",
+                    "Overage usage",
+                    RateWindow::with_details(
+                        0.0,
+                        None,
+                        None,
+                        Some(format!("{credits:.2} credits")),
+                    ),
+                );
+            }
+            if let Some(cost) = estimated_overage_cost {
+                usage = usage.with_extra_rate_window(
+                    "kiro-overage-cost",
+                    "Overage cost",
+                    RateWindow::with_details(0.0, None, None, Some(format!("${cost:.2} USD"))),
+                );
+            }
         }
 
         Ok(usage)

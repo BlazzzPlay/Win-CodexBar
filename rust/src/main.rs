@@ -94,6 +94,15 @@ fn run(log_path: &Path) -> i32 {
                 }
             }
         }),
+        Some(Commands::Serve(args)) => rt.block_on(async {
+            match cli::serve::run(args).await {
+                Ok(()) => exit_codes::SUCCESS,
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    exit_codes::UNEXPECTED_FAILURE
+                }
+            }
+        }),
         Some(Commands::Autostart(args)) => rt.block_on(async {
             match cli::autostart::run(args).await {
                 Ok(()) => exit_codes::SUCCESS,

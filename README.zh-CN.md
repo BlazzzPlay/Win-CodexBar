@@ -14,22 +14,22 @@
 
 ## 功能特性
 
-- **45 个 AI 服务商** — Codex、Claude、Cursor、Factory、Gemini、Copilot、Antigravity、z.ai、MiniMax、Kiro、Vertex AI、Augment、OpenCode、Kimi、Kimi K2、Amp、Warp、Ollama、OpenRouter、Synthetic、JetBrains AI、Alibaba、NanoGPT、Infini、Perplexity、Abacus AI、Mistral、OpenCode Go、Kilo、AWS Bedrock、Codebuff、DeepSeek、Windsurf、Manus、小米 MiMo、Doubao、Command Code、Crof、StepFun、Venice、OpenAI API、ElevenLabs、Deepgram、Groq、LLM Proxy
+- **46 个 AI 服务商** — Codex、Claude、Cursor、Factory、Gemini、Copilot、Antigravity、z.ai、MiniMax、Kiro、Vertex AI、Augment、OpenCode、Kimi、Kimi K2、Amp、Warp、Ollama、OpenRouter、Synthetic、JetBrains AI、Alibaba、NanoGPT、Infini、Perplexity、Abacus AI、Mistral、OpenCode Go、Kilo、AWS Bedrock、Codebuff、DeepSeek、Windsurf、Manus、小米 MiMo、Doubao、Command Code、Crof、StepFun、Venice、OpenAI、Grok、ElevenLabs、Deepgram、Groq、LLM Proxy
 - **系统托盘图标** — 动态双条进度显示会话与周用量
 - **Floating Bar** — 可选的置顶透明用量条，支持方向、透明度和点击穿透控制
 - **浏览器 Cookie 导入** — Chrome、Edge、Brave、Firefox（Windows DPAPI 解密）
 - **逐服务商凭据管理** — API Key、Cookie 和 OAuth 均可在服务商详情面板管理
 - **凭据加固** — 应用管理的本地敏感存储会在保存时使用 Windows DPAPI 保护
 - **Windows 发布打包** — Inno Setup 安装包、独立便携 exe、WebView2 Runtime 引导、VC++ 运行库引导和 SHA-256 校验文件
-- **CLI** — `codexbar usage` 和 `codexbar cost`，便于脚本化和 CI
+- **CLI** — `codexbar usage`、`codexbar cost`、`codexbar config` 和本机回环 `codexbar serve`，便于脚本化、本地集成和 CI
 - **WSL 支持** — CLI 开箱即用，桌面壳层通过 WSLg 运行
 
-## v0.27.0 更新内容
+## v0.27.1 更新内容
 
-- 移植上游 CodexBar 0.27 的 API 配额服务商：ElevenLabs、Deepgram、GroqCloud metrics 和 LLM Proxy quota-stats。
-- 为新服务商补齐图标、图表颜色、设置页 API Key 配置、CLI 别名、Dashboard/Status 链接和 Rust 解析测试。
-- 新增 CLI 配置命令：`codexbar config providers`、`enable`、`disable`、`set-api-key`。
-- Windows/Tauri 桌面端继续让 API Key 类服务商走真实 API 数据源刷新。
+- 补完整上游 CodexBar 0.27 的 Windows/Tauri 移植，不再只是 API Key 配额服务商子集。
+- 新增 Grok 支持，可通过浏览器 Cookie 或 `~/.grok/auth.json` 读取账单信息，并补齐设置页、图标和图表颜色。
+- 新增 Claude Admin API 用量、OpenAI Admin API 用量与余额回退、MiniMax 账单汇总、OpenCode Go Zen 余额，以及 Kiro 超额用量/费用解析。
+- 新增 `codexbar serve`，可在本机回环地址提供 `/health`、`/usage`、`/cost` JSON，并补齐上游兼容的 `--all-accounts` CLI 参数。
 
 ## 快速开始
 
@@ -93,8 +93,8 @@ codexbar cost  -p codex           # 本地成本（JSONL 日志）
 | Copilot | GitHub Device Flow | 用量 |
 | Antigravity | Cookies / LSP | 用量 |
 | z.ai | API Token | 配额 |
-| MiniMax | API / Cookies | 用量 |
-| Kiro | Cookies / CLI | 月度 Credits |
+| MiniMax | API / Cookies | 用量、账单汇总 |
+| Kiro | Cookies / CLI | 月度 Credits、超额用量 |
 | Vertex AI | gcloud OAuth | 成本 |
 | Augment | Cookies | Credits |
 | OpenCode | 本地配置 | 用量 |
@@ -111,11 +111,24 @@ codexbar cost  -p codex           # 本地成本（JSONL 日志）
 | Perplexity | Cookies | Credits、套餐 |
 | Abacus AI | Cookies | Credits |
 | Mistral | Cookies | 账单、用量 |
-| OpenCode Go | Cookies | 用量 |
+| OpenCode Go | Cookies | 用量、Zen 余额 |
 | Kilo | API Key / CLI | 用量 |
 | Codebuff | API Key / 本地配置 | Credits、周用量 |
 | DeepSeek | API Key | 余额 |
 | Windsurf | 本地缓存 | 日用量、周用量 |
+| Manus | Cookies | Credits、刷新 Credits |
+| 小米 MiMo | Cookies | 余额、Token 套餐 |
+| Doubao | API Key | 请求限制 |
+| Command Code | Cookies | 月度 Credits、已购 Credits |
+| Crof | API Key | Credits、请求配额 |
+| StepFun | Oasis Token | 5h、周用量 |
+| Venice | API Key | USD / DIEM 余额 |
+| OpenAI | Admin API / API Key | 用量、请求数、余额 |
+| Grok | Cookies / auth.json | 账单 |
+| ElevenLabs | API Key | 订阅 Credits、Voice Slots |
+| Deepgram | API Key | 项目用量 |
+| Groq | API Key | Enterprise Metrics |
+| LLM Proxy | API Key | 配额统计 |
 
 ## 隐私
 

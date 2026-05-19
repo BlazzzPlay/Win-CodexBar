@@ -185,6 +185,7 @@ impl TokenAccountSupport {
             | ProviderId::StepFun
             | ProviderId::Venice
             | ProviderId::OpenAIApi
+            | ProviderId::Grok
             | ProviderId::ElevenLabs
             | ProviderId::Deepgram
             | ProviderId::Groq

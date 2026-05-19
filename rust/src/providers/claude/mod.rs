@@ -1,5 +1,6 @@
 //! Claude provider implementation
 
+mod admin_api;
 mod oauth;
 mod web_api;
 
@@ -16,6 +17,7 @@ use crate::core::{
     RateWindow, SourceMode, UsageSnapshot,
 };
 
+use admin_api::ClaudeAdminApiFetcher;
 pub use oauth::ClaudeOAuthFetcher;
 pub use web_api::ClaudeWebApiFetcher;
 
@@ -24,6 +26,7 @@ pub struct ClaudeProvider {
     metadata: ProviderMetadata,
     web_fetcher: ClaudeWebApiFetcher,
     oauth_fetcher: ClaudeOAuthFetcher,
+    admin_fetcher: ClaudeAdminApiFetcher,
 }
 
 impl ClaudeProvider {
@@ -43,6 +46,7 @@ impl ClaudeProvider {
             },
             web_fetcher: ClaudeWebApiFetcher::new(),
             oauth_fetcher: ClaudeOAuthFetcher::new(),
+            admin_fetcher: ClaudeAdminApiFetcher::new(),
         }
     }
 }
@@ -170,6 +174,12 @@ impl Provider for ClaudeProvider {
             SourceMode::Auto => {
                 let mut failures = Vec::new();
 
+                if self.admin_fetcher.has_credentials(ctx) {
+                    match self.fetch_via_admin_api(ctx).await {
+                        Ok(result) => return Ok(result),
+                        Err(error) => failures.push(("Admin API", error)),
+                    }
+                }
                 match self.fetch_via_oauth(ctx).await {
                     Ok(result) => return Ok(result),
                     Err(error) => failures.push(("OAuth", error)),
@@ -232,6 +242,14 @@ impl ClaudeProvider {
             return self.oauth_fetcher.fetch_with_access_token(token).await;
         }
         self.oauth_fetcher.fetch().await
+    }
+
+    async fn fetch_via_admin_api(
+        &self,
+        ctx: &FetchContext,
+    ) -> Result<ProviderFetchResult, ProviderError> {
+        tracing::debug!("Attempting Admin API fetch for Claude");
+        self.admin_fetcher.fetch(ctx).await
     }
 
     async fn fetch_via_web(

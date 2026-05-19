@@ -14,22 +14,22 @@ The Windows port of [CodexBar](https://github.com/steipete/CodexBar) — a syste
 
 ## Features
 
-- **45 AI providers** — Codex, Claude, Cursor, Factory, Gemini, Copilot, Antigravity, z.ai, MiniMax, Kiro, Vertex AI, Augment, OpenCode, Kimi, Kimi K2, Amp, Warp, Ollama, OpenRouter, Synthetic, JetBrains AI, Alibaba, NanoGPT, Infini, Perplexity, Abacus AI, Mistral, OpenCode Go, Kilo, AWS Bedrock, Codebuff, DeepSeek, Windsurf, Manus, Xiaomi MiMo, Doubao, Command Code, Crof, StepFun, Venice, OpenAI API, ElevenLabs, Deepgram, Groq, LLM Proxy
+- **46 AI providers** — Codex, Claude, Cursor, Factory, Gemini, Copilot, Antigravity, z.ai, MiniMax, Kiro, Vertex AI, Augment, OpenCode, Kimi, Kimi K2, Amp, Warp, Ollama, OpenRouter, Synthetic, JetBrains AI, Alibaba, NanoGPT, Infini, Perplexity, Abacus AI, Mistral, OpenCode Go, Kilo, AWS Bedrock, Codebuff, DeepSeek, Windsurf, Manus, Xiaomi MiMo, Doubao, Command Code, Crof, StepFun, Venice, OpenAI, Grok, ElevenLabs, Deepgram, Groq, LLM Proxy
 - **System tray icon** — dynamic two-bar meter showing session + weekly usage
 - **Floating Bar** — optional always-on-top transparent capacity strip with orientation, opacity, and click-through controls
 - **Browser cookie import** — Chrome, Edge, Brave, Firefox, with browser access kept opt-in
 - **Per-provider credentials** — API keys, cookies, and OAuth all managed from the provider detail pane
 - **Credential hardening** — local secret-bearing stores are protected with Windows DPAPI on save
 - **Windows release packaging** — Inno Setup installer, standalone portable exe, WebView2 runtime bootstrap, VC++ runtime bootstrap, and SHA-256 checksum files
-- **CLI** — `codexbar usage` and `codexbar cost` for scripting and CI
+- **CLI** — `codexbar usage`, `codexbar cost`, `codexbar config`, and loopback `codexbar serve` for scripting and local integrations
 - **WSL support** — CLI works out of the box; desktop shell via WSLg
 
-## What's New in v0.27.0
+## What's New in v0.27.1
 
-- Ported upstream CodexBar 0.27 API quota providers for ElevenLabs, Deepgram, GroqCloud metrics, and LLM Proxy quota-stats.
-- Added provider icons, chart colors, Settings API-key setup, CLI aliases, dashboard/status links, and Rust parser coverage for the new providers.
-- Added CLI config helpers: `codexbar config providers`, `enable`, `disable`, and `set-api-key`.
-- Kept provider refresh on the real API source path for API-key providers in the Windows/Tauri shell.
+- Completes the upstream CodexBar 0.27 provider port for Windows/Tauri instead of only shipping the API-key quota subset.
+- Adds Grok support with browser-cookie and `~/.grok/auth.json` billing detection, plus Settings/provider icon/chart wiring.
+- Adds Claude Admin API usage, OpenAI Admin API usage with credit-balance fallback, MiniMax billing summaries, OpenCode Go Zen balance display, and Kiro overage usage/cost parsing.
+- Adds `codexbar serve` for loopback JSON access to `/health`, `/usage`, and `/cost`, plus the upstream-compatible `--all-accounts` CLI flag surface.
 
 ## Quick Start
 
@@ -93,8 +93,8 @@ codexbar cost  -p codex           # local cost from JSONL logs
 | Copilot | GitHub Device Flow | Usage |
 | Antigravity | Cookies / LSP | Usage |
 | z.ai | API Token | Quota |
-| MiniMax | API / Cookies | Usage |
-| Kiro | Cookies / CLI | Monthly Credits |
+| MiniMax | API / Cookies | Usage, Billing Summary |
+| Kiro | Cookies / CLI | Monthly Credits, Overage |
 | Vertex AI | gcloud OAuth | Cost |
 | Augment | Cookies | Credits |
 | OpenCode | Local Config | Usage |
@@ -111,7 +111,7 @@ codexbar cost  -p codex           # local cost from JSONL logs
 | Perplexity | Cookies | Credits, Plan |
 | Abacus AI | Cookies | Credits |
 | Mistral | Cookies | Billing, Usage |
-| OpenCode Go | Cookies | Usage |
+| OpenCode Go | Cookies | Usage, Zen Balance |
 | Kilo | API Key / CLI | Usage |
 | Codebuff | API Key / Local Config | Credits, Weekly |
 | DeepSeek | API Key | Balance |
@@ -123,7 +123,12 @@ codexbar cost  -p codex           # local cost from JSONL logs
 | Crof | API Key | Credits, Request Quota |
 | StepFun | Oasis Token | 5h, Weekly |
 | Venice | API Key | USD / DIEM Balance |
-| OpenAI API | API Key | Credit Balance |
+| OpenAI | Admin API / API Key | Usage, Requests, Credit Balance |
+| Grok | Cookies / auth.json | Billing |
+| ElevenLabs | API Key | Subscription Credits, Voice Slots |
+| Deepgram | API Key | Project Usage |
+| Groq | API Key | Enterprise Metrics |
+| LLM Proxy | API Key | Quota Stats |
 
 ## Privacy
 

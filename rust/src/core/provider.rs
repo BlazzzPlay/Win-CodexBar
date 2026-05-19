@@ -52,6 +52,7 @@ pub enum ProviderId {
     StepFun,
     Venice,
     OpenAIApi,
+    Grok,
     ElevenLabs,
     Deepgram,
     Groq,
@@ -103,6 +104,7 @@ impl ProviderId {
             ProviderId::StepFun,
             ProviderId::Venice,
             ProviderId::OpenAIApi,
+            ProviderId::Grok,
             ProviderId::ElevenLabs,
             ProviderId::Deepgram,
             ProviderId::Groq,
@@ -154,6 +156,7 @@ impl ProviderId {
             ProviderId::StepFun => "stepfun",
             ProviderId::Venice => "venice",
             ProviderId::OpenAIApi => "openaiapi",
+            ProviderId::Grok => "grok",
             ProviderId::ElevenLabs => "elevenlabs",
             ProviderId::Deepgram => "deepgram",
             ProviderId::Groq => "groq",
@@ -205,6 +208,7 @@ impl ProviderId {
             ProviderId::StepFun => "StepFun",
             ProviderId::Venice => "Venice",
             ProviderId::OpenAIApi => "OpenAI API",
+            ProviderId::Grok => "Grok",
             ProviderId::ElevenLabs => "ElevenLabs",
             ProviderId::Deepgram => "Deepgram",
             ProviderId::Groq => "Groq",
@@ -239,6 +243,7 @@ impl ProviderId {
             ProviderId::Manus => Some("manus.im"),
             ProviderId::MiMo => Some("platform.xiaomimimo.com"),
             ProviderId::CommandCode => Some("commandcode.ai"),
+            ProviderId::Grok => Some("grok.com"),
             // Token-based providers (don't use cookies)
             ProviderId::Copilot => None,
             ProviderId::Zai => None,
@@ -316,6 +321,7 @@ impl ProviderId {
             "openaiapi" | "openai-api" | "openai api" | "openai-balance" => {
                 Some(ProviderId::OpenAIApi)
             }
+            "grok" | "xai" | "x.ai" | "supergrok" | "super-grok" => Some(ProviderId::Grok),
             "elevenlabs" | "eleven-labs" | "11labs" => Some(ProviderId::ElevenLabs),
             "deepgram" | "dg" => Some(ProviderId::Deepgram),
             "groq" | "groqcloud" | "groq-cloud" | "groq cloud" => Some(ProviderId::Groq),
@@ -517,6 +523,8 @@ pub fn cli_name_map() -> HashMap<&'static str, ProviderId> {
     map.insert("step-fun", ProviderId::StepFun);
     map.insert("openai-api", ProviderId::OpenAIApi);
     map.insert("openai-balance", ProviderId::OpenAIApi);
+    map.insert("xai", ProviderId::Grok);
+    map.insert("supergrok", ProviderId::Grok);
     map.insert("eleven-labs", ProviderId::ElevenLabs);
     map.insert("11labs", ProviderId::ElevenLabs);
     map.insert("dg", ProviderId::Deepgram);
@@ -533,7 +541,7 @@ mod tests {
     #[test]
     fn test_provider_id_all() {
         let all = ProviderId::all();
-        assert_eq!(all.len(), 45);
+        assert_eq!(all.len(), 46);
         assert!(all.contains(&ProviderId::Claude));
         assert!(all.contains(&ProviderId::Codex));
         assert!(all.contains(&ProviderId::Kimi));
@@ -555,6 +563,7 @@ mod tests {
         assert!(all.contains(&ProviderId::StepFun));
         assert!(all.contains(&ProviderId::Venice));
         assert!(all.contains(&ProviderId::OpenAIApi));
+        assert!(all.contains(&ProviderId::Grok));
         assert!(all.contains(&ProviderId::ElevenLabs));
         assert!(all.contains(&ProviderId::Deepgram));
         assert!(all.contains(&ProviderId::Groq));

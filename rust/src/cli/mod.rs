@@ -12,6 +12,7 @@ pub mod account;
 pub mod autostart;
 pub mod config;
 pub mod cost;
+pub mod serve;
 pub mod tty_runner;
 pub mod usage;
 
@@ -75,6 +76,10 @@ pub struct Cli {
     #[arg(long)]
     pub status: bool,
 
+    /// Fetch all token accounts where supported
+    #[arg(long = "all-accounts")]
+    pub all_accounts: bool,
+
     /// Skip credits line in output
     #[arg(long = "no-credits")]
     pub no_credits: bool,
@@ -104,6 +109,9 @@ pub enum Commands {
     /// Print local token cost usage (Claude + Codex) without web/CLI access
     Cost(cost::CostArgs),
 
+    /// Serve usage and cost JSON on 127.0.0.1
+    Serve(serve::ServeArgs),
+
     /// Manage auto-start on Windows boot
     Autostart(autostart::AutostartArgs),
 
@@ -131,6 +139,7 @@ impl Cli {
             no_color: self.no_color,
             pretty: self.pretty,
             status: self.status,
+            all_accounts: self.all_accounts,
             source: self.source.clone(),
             web_timeout: self.web_timeout,
             web_debug_dump_html: self.web_debug_dump_html,

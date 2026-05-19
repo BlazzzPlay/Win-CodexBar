@@ -1847,12 +1847,23 @@ pub fn get_api_key_providers() -> Vec<ProviderConfigInfo> {
         },
         ProviderConfigInfo {
             id: ProviderId::OpenAIApi,
-            name: "OpenAI API",
+            name: "OpenAI",
             requires_api_key: true,
-            api_key_env_var: Some("OPENAI_API_KEY"),
-            api_key_help: Some("Use an OpenAI API key with billing credit-grants access."),
+            api_key_env_var: Some("OPENAI_ADMIN_KEY / OPENAI_API_KEY"),
+            api_key_help: Some(
+                "Use an OpenAI Admin API key for usage, or a platform key for legacy billing balance.",
+            ),
             config_file_path: None,
             dashboard_url: Some("https://platform.openai.com/usage"),
+        },
+        ProviderConfigInfo {
+            id: ProviderId::Grok,
+            name: "Grok",
+            requires_api_key: false,
+            api_key_env_var: None,
+            api_key_help: Some("Uses Grok browser cookies or ~/.grok/auth.json."),
+            config_file_path: Some("~/.grok/auth.json"),
+            dashboard_url: Some("https://grok.com/settings/subscription"),
         },
         ProviderConfigInfo {
             id: ProviderId::ElevenLabs,
@@ -2054,6 +2065,7 @@ mod tests {
             ProviderId::DeepSeek,
             ProviderId::ElevenLabs,
             ProviderId::Deepgram,
+            ProviderId::Grok,
             ProviderId::Groq,
             ProviderId::LLMProxy,
         ] {

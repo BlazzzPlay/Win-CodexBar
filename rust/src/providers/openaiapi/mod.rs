@@ -1,11 +1,13 @@
-//! OpenAI API balance provider.
+//! OpenAI API usage provider.
 //!
-//! Tracks optional platform credit balance from OpenAI's billing credit grants endpoint.
+//! Tracks organization usage from the Admin API, with the older platform credit
+//! balance endpoint as a fallback for project/user keys.
 
 use async_trait::async_trait;
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Duration, TimeZone, Utc};
 use reqwest::Client;
 use serde::Deserialize;
+use std::collections::HashMap;
 
 use crate::core::{
     CostSnapshot, FetchContext, Provider, ProviderError, ProviderFetchResult, ProviderId,
@@ -13,6 +15,8 @@ use crate::core::{
 };
 
 const OPENAI_CREDIT_GRANTS_URL: &str = "https://api.openai.com/v1/dashboard/billing/credit_grants";
+const OPENAI_ORG_COSTS_URL: &str = "https://api.openai.com/v1/organization/costs";
+const OPENAI_ORG_COMPLETIONS_URL: &str = "https://api.openai.com/v1/organization/usage/completions";
 const OPENAI_API_CREDENTIAL_TARGET: &str = "codexbar-openaiapi";
 
 #[derive(Debug, Deserialize)]
@@ -33,6 +37,54 @@ struct CreditGrant {
     expires_at: Option<i64>,
 }
 
+#[derive(Debug, Deserialize)]
+struct CostsResponse {
+    data: Vec<CostBucket>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CostBucket {
+    start_time: i64,
+    #[allow(dead_code)]
+    end_time: i64,
+    results: Vec<CostResult>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CostResult {
+    amount: Option<CostAmount>,
+    line_item: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CostAmount {
+    value: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct CompletionsUsageResponse {
+    data: Vec<CompletionsUsageBucket>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CompletionsUsageBucket {
+    start_time: i64,
+    #[allow(dead_code)]
+    end_time: i64,
+    results: Vec<CompletionsUsageResult>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CompletionsUsageResult {
+    model: Option<String>,
+    input_tokens: Option<i64>,
+    input_cached_tokens: Option<i64>,
+    output_tokens: Option<i64>,
+    input_audio_tokens: Option<i64>,
+    output_audio_tokens: Option<i64>,
+    num_model_requests: Option<i64>,
+}
+
 pub struct OpenAIApiProvider {
     metadata: ProviderMetadata,
     client: Client,
@@ -43,11 +95,11 @@ impl OpenAIApiProvider {
         Self {
             metadata: ProviderMetadata {
                 id: ProviderId::OpenAIApi,
-                display_name: "OpenAI API",
-                session_label: "Credits",
-                weekly_label: "Balance",
+                display_name: "OpenAI",
+                session_label: "Spend",
+                weekly_label: "Requests",
                 supports_opus: false,
-                supports_credits: true,
+                supports_credits: false,
                 default_enabled: false,
                 is_primary: false,
                 dashboard_url: Some("https://platform.openai.com/usage"),
@@ -64,7 +116,12 @@ impl OpenAIApiProvider {
         resolve_api_key(
             api_key,
             OPENAI_API_CREDENTIAL_TARGET,
-            &["OPENAI_API_KEY", "OPENAI_PLATFORM_API_KEY"],
+            &[
+                "OPENAI_ADMIN_KEY",
+                "OPENAI_ADMIN_API_KEY",
+                "OPENAI_API_KEY",
+                "OPENAI_PLATFORM_API_KEY",
+            ],
         )
     }
 
@@ -94,6 +151,84 @@ impl OpenAIApiProvider {
             ProviderError::Parse(format!("Failed to parse OpenAI API credit grants: {e}"))
         })?;
         Ok(result_from_grants(&decoded))
+    }
+
+    async fn fetch_admin_usage(&self, api_key: &str) -> Result<ProviderFetchResult, ProviderError> {
+        let now = Utc::now();
+        let start = (now.date_naive() - Duration::days(29))
+            .and_hms_opt(0, 0, 0)
+            .ok_or_else(|| ProviderError::Parse("Invalid OpenAI usage start date".to_string()))?
+            .and_utc()
+            .timestamp();
+        let end = (now.date_naive() + Duration::days(1))
+            .and_hms_opt(0, 0, 0)
+            .ok_or_else(|| ProviderError::Parse("Invalid OpenAI usage end date".to_string()))?
+            .and_utc()
+            .timestamp();
+
+        let costs: CostsResponse = self
+            .fetch_admin_json(
+                OPENAI_ORG_COSTS_URL,
+                &[
+                    ("start_time", start.to_string()),
+                    ("end_time", end.to_string()),
+                    ("bucket_width", "1d".to_string()),
+                    ("limit", "31".to_string()),
+                    ("group_by", "line_item".to_string()),
+                ],
+                api_key,
+                "costs",
+            )
+            .await?;
+
+        let completions: CompletionsUsageResponse = self
+            .fetch_admin_json(
+                OPENAI_ORG_COMPLETIONS_URL,
+                &[
+                    ("start_time", start.to_string()),
+                    ("end_time", end.to_string()),
+                    ("bucket_width", "1d".to_string()),
+                    ("limit", "31".to_string()),
+                    ("group_by", "model".to_string()),
+                ],
+                api_key,
+                "completions",
+            )
+            .await?;
+
+        Ok(result_from_admin_usage(&costs, &completions, now))
+    }
+
+    async fn fetch_admin_json<T: serde::de::DeserializeOwned>(
+        &self,
+        url: &str,
+        query: &[(&str, String)],
+        api_key: &str,
+        label: &str,
+    ) -> Result<T, ProviderError> {
+        let response = self
+            .client
+            .get(url)
+            .query(query)
+            .bearer_auth(api_key)
+            .header("Accept", "application/json")
+            .send()
+            .await?;
+        if response.status() == reqwest::StatusCode::UNAUTHORIZED
+            || response.status() == reqwest::StatusCode::FORBIDDEN
+        {
+            return Err(ProviderError::AuthRequired);
+        }
+        if !response.status().is_success() {
+            return Err(ProviderError::Other(format!(
+                "OpenAI API {label} returned status {}",
+                response.status()
+            )));
+        }
+        response
+            .json()
+            .await
+            .map_err(|e| ProviderError::Parse(format!("Failed to parse OpenAI API {label}: {e}")))
     }
 }
 
@@ -138,6 +273,136 @@ fn result_from_grants(grants: &CreditGrantsResponse) -> ProviderFetchResult {
     ProviderFetchResult::new(usage, "api").with_cost(cost)
 }
 
+fn result_from_admin_usage(
+    costs: &CostsResponse,
+    completions: &CompletionsUsageResponse,
+    now: DateTime<Utc>,
+) -> ProviderFetchResult {
+    let cost_total: f64 = costs
+        .data
+        .iter()
+        .flat_map(|bucket| &bucket.results)
+        .map(|result| {
+            result
+                .amount
+                .as_ref()
+                .and_then(|a| number_value(&a.value))
+                .unwrap_or(0.0)
+        })
+        .sum();
+    let request_total: i64 = completions
+        .data
+        .iter()
+        .flat_map(|bucket| &bucket.results)
+        .map(|result| result.num_model_requests.unwrap_or(0))
+        .sum();
+    let token_total: i64 = completions
+        .data
+        .iter()
+        .flat_map(|bucket| &bucket.results)
+        .map(|result| {
+            result.input_tokens.unwrap_or(0)
+                + result.input_cached_tokens.unwrap_or(0)
+                + result.output_tokens.unwrap_or(0)
+                + result.input_audio_tokens.unwrap_or(0)
+                + result.output_audio_tokens.unwrap_or(0)
+        })
+        .sum();
+
+    let first_bucket = costs
+        .data
+        .first()
+        .map(|b| b.start_time)
+        .or_else(|| completions.data.first().map(|b| b.start_time));
+    let start = first_bucket.and_then(|ts| Utc.timestamp_opt(ts, 0).single());
+
+    let mut model_tokens: HashMap<String, i64> = HashMap::new();
+    for result in completions.data.iter().flat_map(|bucket| &bucket.results) {
+        let model = result
+            .model
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("Responses and Chat Completions");
+        let tokens = result.input_tokens.unwrap_or(0)
+            + result.input_cached_tokens.unwrap_or(0)
+            + result.output_tokens.unwrap_or(0)
+            + result.input_audio_tokens.unwrap_or(0)
+            + result.output_audio_tokens.unwrap_or(0);
+        *model_tokens.entry(model.to_string()).or_default() += tokens;
+    }
+
+    let mut line_item_costs: HashMap<String, f64> = HashMap::new();
+    for result in costs.data.iter().flat_map(|bucket| &bucket.results) {
+        let line_item = result
+            .line_item
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("API");
+        *line_item_costs.entry(line_item.to_string()).or_default() += result
+            .amount
+            .as_ref()
+            .and_then(|a| number_value(&a.value))
+            .unwrap_or(0.0);
+    }
+
+    let request_percent = if request_total > 0 { 100.0 } else { 0.0 };
+    let mut usage = UsageSnapshot::new(RateWindow::with_details(
+        0.0,
+        None,
+        start,
+        Some(format!("${cost_total:.2} over last 30 days")),
+    ))
+    .with_secondary(RateWindow::with_details(
+        request_percent,
+        None,
+        None,
+        Some(format!("{request_total} requests")),
+    ))
+    .with_extra_rate_window(
+        "tokens",
+        "Tokens",
+        RateWindow::with_details(0.0, None, None, Some(format!("{token_total} tokens"))),
+    )
+    .with_login_method("Admin API");
+    usage.updated_at = now;
+
+    let mut top_models: Vec<_> = model_tokens.into_iter().collect();
+    top_models.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    for (idx, (model, tokens)) in top_models.into_iter().take(3).enumerate() {
+        usage = usage.with_extra_rate_window(
+            format!("model-{idx}"),
+            format!("Model: {model}"),
+            RateWindow::with_details(0.0, None, None, Some(format!("{tokens} tokens"))),
+        );
+    }
+
+    let mut top_items: Vec<_> = line_item_costs.into_iter().collect();
+    top_items.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    for (idx, (item, amount)) in top_items.into_iter().take(3).enumerate() {
+        usage = usage.with_extra_rate_window(
+            format!("line-item-{idx}"),
+            format!("Cost: {item}"),
+            RateWindow::with_details(0.0, None, None, Some(format!("${amount:.2}"))),
+        );
+    }
+
+    ProviderFetchResult::new(usage, "admin-api").with_cost(CostSnapshot::new(
+        cost_total,
+        "USD",
+        "Last 30 days",
+    ))
+}
+
+fn number_value(value: &serde_json::Value) -> Option<f64> {
+    match value {
+        serde_json::Value::Number(number) => number.as_f64(),
+        serde_json::Value::String(text) => text.trim().replace(',', "").parse().ok(),
+        _ => None,
+    }
+}
+
 impl Default for OpenAIApiProvider {
     fn default() -> Self {
         Self::new()
@@ -158,7 +423,22 @@ impl Provider for OpenAIApiProvider {
         match ctx.source_mode {
             SourceMode::Auto | SourceMode::OAuth => {
                 let api_key = Self::api_key(ctx.api_key.as_deref())?;
-                self.fetch_api(&api_key).await
+                match self.fetch_admin_usage(&api_key).await {
+                    Ok(result) => Ok(result),
+                    Err(admin_error) => match self.fetch_api(&api_key).await {
+                        Ok(result) => Ok(ProviderFetchResult {
+                            source_label: "billing-api".to_string(),
+                            ..result
+                        }),
+                        Err(balance_error) => {
+                            if matches!(admin_error, ProviderError::AuthRequired) {
+                                Err(balance_error)
+                            } else {
+                                Err(admin_error)
+                            }
+                        }
+                    },
+                }
             }
             SourceMode::Web | SourceMode::Cli => {
                 Err(ProviderError::UnsupportedSource(ctx.source_mode))
@@ -217,5 +497,46 @@ mod tests {
         });
         assert_eq!(result.usage.primary.used_percent, 25.0);
         assert_eq!(result.cost.unwrap().remaining(), Some(75.0));
+    }
+
+    #[test]
+    fn openai_admin_usage_accepts_numeric_string_cost_amounts() {
+        let costs = CostsResponse {
+            data: vec![CostBucket {
+                start_time: 1_797_638_400,
+                end_time: 1_797_724_800,
+                results: vec![CostResult {
+                    amount: Some(CostAmount {
+                        value: serde_json::json!("12.50"),
+                    }),
+                    line_item: Some("API".to_string()),
+                }],
+            }],
+        };
+        let completions = CompletionsUsageResponse {
+            data: vec![CompletionsUsageBucket {
+                start_time: 1_797_638_400,
+                end_time: 1_797_724_800,
+                results: vec![CompletionsUsageResult {
+                    model: Some("gpt-5.1".to_string()),
+                    input_tokens: Some(100),
+                    input_cached_tokens: Some(25),
+                    output_tokens: Some(50),
+                    input_audio_tokens: None,
+                    output_audio_tokens: None,
+                    num_model_requests: Some(7),
+                }],
+            }],
+        };
+        let now = Utc.timestamp_opt(1_797_724_800, 0).single().unwrap();
+        let result = result_from_admin_usage(&costs, &completions, now);
+        assert_eq!(result.cost.unwrap().used, 12.5);
+        assert!(
+            result.usage.extra_rate_windows.iter().any(|window| window
+                .window
+                .reset_description
+                .as_deref()
+                == Some("175 tokens"))
+        );
     }
 }

@@ -352,6 +352,7 @@ pub fn account_name_for_provider(provider: ProviderId) -> &'static str {
         ProviderId::StepFun => "stepfun-token",
         ProviderId::Venice => "venice-api-token",
         ProviderId::OpenAIApi => "openaiapi-token",
+        ProviderId::Grok => "grok-cookie",
         ProviderId::ElevenLabs => "elevenlabs-api-token",
         ProviderId::Deepgram => "deepgram-api-token",
         ProviderId::Groq => "groq-api-token",

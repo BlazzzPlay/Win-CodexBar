@@ -40,6 +40,10 @@ pub struct UsageArgs {
     #[arg(long)]
     pub status: bool,
 
+    /// Fetch all token accounts where supported
+    #[arg(long = "all-accounts")]
+    pub all_accounts: bool,
+
     /// Data source: auto, oauth, web, cli
     #[arg(long, default_value = "auto", value_parser = ["auto", "web", "cli", "oauth"])]
     pub source: String,
