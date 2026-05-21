@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+---
+
+## [Windows] 0.27.3 - 2026-05-21
+
 ### Fixed
 - Prefer Claude browser-session usage over Claude OAuth in Auto mode so the app follows the same settings-page endpoint as `claude.ai/settings/usage`.
 - Use Claude's `lastActiveOrg` cookie or account memberships before falling back to the organizations list, which keeps multi-org accounts aligned with the active Claude web session.
