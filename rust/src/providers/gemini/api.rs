@@ -5,7 +5,7 @@
 use crate::core::{FetchContext, ProviderError, RateWindow};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const QUOTA_ENDPOINT: &str = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota";
 const TOKEN_REFRESH_ENDPOINT: &str = "https://oauth2.googleapis.com/token";
@@ -158,71 +158,83 @@ impl GeminiApi {
     }
 
     fn extract_oauth_client_credentials(&self) -> Result<OAuthClientCredentials, ProviderError> {
-        // Try to read OAuth client credentials from Gemini CLI installation
-        // Check multiple possible locations: CLI install paths, bundled OAuth config
+        self.user_client_config_credentials()
+            .or_else(|| self.gemini_binary_oauth_credentials())
+            .or_else(Self::platform_oauth_credentials)
+            .or_else(Self::fnm_oauth_credentials)
+            .map(Ok)
+            .unwrap_or_else(Self::oauth_credentials_from_env)
+    }
 
-        // 1. Try ~/.gemini/client_config.json (user-configured)
-        if let Some(home) = dirs::home_dir() {
-            let cli_config = home.join(".gemini").join("client_config.json");
-            if let Some(creds) = Self::try_read_client_config(&cli_config) {
-                return Ok(creds);
-            }
-        }
+    fn user_client_config_credentials(&self) -> Option<OAuthClientCredentials> {
+        let cli_config = dirs::home_dir()?.join(".gemini").join("client_config.json");
+        Self::try_read_client_config(&cli_config)
+    }
 
-        // 2. Try to find gemini binary and extract OAuth creds from its package
-        if let Ok(gemini_path) = which::which("gemini") {
-            let resolved = std::fs::canonicalize(&gemini_path).unwrap_or(gemini_path);
-            if let Some(base_dir) = resolved.parent() {
-                // Try Homebrew/npm/Nix/Bun layout candidates relative to the binary
-                let oauth_subpath = std::path::Path::new("@google")
-                    .join("gemini-cli-core")
-                    .join("dist")
-                    .join("src")
-                    .join("code_assist")
-                    .join("oauth2.js");
+    fn gemini_binary_oauth_credentials(&self) -> Option<OAuthClientCredentials> {
+        let gemini_path = which::which("gemini").ok()?;
+        let resolved = std::fs::canonicalize(&gemini_path).unwrap_or(gemini_path);
+        let base_dir = resolved.parent()?;
 
-                let candidates = [
-                    // npm global: {bin}/../node_modules/@google/gemini-cli-core/...
-                    base_dir
-                        .join("..")
-                        .join("node_modules")
-                        .join(&oauth_subpath),
-                    // Homebrew: {bin}/../libexec/lib/node_modules/@google/gemini-cli/node_modules/...
-                    base_dir
-                        .join("..")
-                        .join("libexec")
-                        .join("lib")
-                        .join("node_modules")
-                        .join("@google")
-                        .join("gemini-cli")
-                        .join("node_modules")
-                        .join(&oauth_subpath),
-                    // Nix: {bin}/../share/gemini-cli/node_modules/...
-                    base_dir
-                        .join("..")
-                        .join("share")
-                        .join("gemini-cli")
-                        .join("node_modules")
-                        .join(&oauth_subpath),
-                    // Bun sibling
-                    base_dir
-                        .join("..")
-                        .join("gemini-cli-core")
-                        .join("dist")
-                        .join("src")
-                        .join("code_assist")
-                        .join("oauth2.js"),
-                ];
+        Self::oauth_credentials_from_candidates(Self::binary_oauth_candidates(base_dir))
+    }
 
-                for candidate in &candidates {
-                    if let Some(creds) = Self::try_extract_oauth_from_js(candidate) {
-                        return Ok(creds);
-                    }
-                }
-            }
-        }
+    fn oauth_credentials_from_candidates<I>(candidates: I) -> Option<OAuthClientCredentials>
+    where
+        I: IntoIterator<Item = PathBuf>,
+    {
+        candidates
+            .into_iter()
+            .find_map(|candidate| Self::try_extract_oauth_from_js(&candidate))
+    }
 
-        // 3. Windows-specific: check %APPDATA%\npm\node_modules path
+    fn binary_oauth_candidates(base_dir: &Path) -> Vec<PathBuf> {
+        let oauth_subpath = Self::oauth_subpath();
+        vec![
+            // npm global: {bin}/../node_modules/@google/gemini-cli-core/...
+            base_dir
+                .join("..")
+                .join("node_modules")
+                .join(&oauth_subpath),
+            // Homebrew: {bin}/../libexec/lib/node_modules/@google/gemini-cli/node_modules/...
+            base_dir
+                .join("..")
+                .join("libexec")
+                .join("lib")
+                .join("node_modules")
+                .join("@google")
+                .join("gemini-cli")
+                .join("node_modules")
+                .join(&oauth_subpath),
+            // Nix: {bin}/../share/gemini-cli/node_modules/...
+            base_dir
+                .join("..")
+                .join("share")
+                .join("gemini-cli")
+                .join("node_modules")
+                .join(&oauth_subpath),
+            // Bun sibling
+            base_dir
+                .join("..")
+                .join("gemini-cli-core")
+                .join("dist")
+                .join("src")
+                .join("code_assist")
+                .join("oauth2.js"),
+        ]
+    }
+
+    fn oauth_subpath() -> PathBuf {
+        Path::new("@google")
+            .join("gemini-cli-core")
+            .join("dist")
+            .join("src")
+            .join("code_assist")
+            .join("oauth2.js")
+    }
+
+    #[cfg(windows)]
+    fn platform_oauth_credentials() -> Option<OAuthClientCredentials> {
         #[cfg(windows)]
         if let Some(appdata) = dirs::data_dir() {
             let npm_path = appdata
@@ -235,63 +247,61 @@ impl GeminiApi {
                 .join("code_assist")
                 .join("oauth2.js");
             if let Some(creds) = Self::try_extract_oauth_from_js(&npm_path) {
-                return Ok(creds);
+                return Some(creds);
             }
         }
 
-        // 3b. fnm-managed Node: scan %LOCALAPPDATA%\fnm\node-versions\*
+        None
+    }
+
+    #[cfg(not(windows))]
+    fn platform_oauth_credentials() -> Option<OAuthClientCredentials> {
+        None
+    }
+
+    #[cfg(windows)]
+    fn fnm_oauth_credentials() -> Option<OAuthClientCredentials> {
         #[cfg(windows)]
         if let Some(local_appdata) = dirs::data_local_dir() {
             let fnm_versions = local_appdata.join("fnm").join("node-versions");
-            if fnm_versions.is_dir()
-                && let Ok(entries) = std::fs::read_dir(&fnm_versions)
-            {
-                for entry in entries.flatten() {
-                    let candidate = entry
-                        .path()
-                        .join("installation")
-                        .join("lib")
-                        .join("node_modules")
-                        .join("@google")
-                        .join("gemini-cli-core")
-                        .join("dist")
-                        .join("src")
-                        .join("code_assist")
-                        .join("oauth2.js");
-                    if let Some(creds) = Self::try_extract_oauth_from_js(&candidate) {
-                        return Ok(creds);
-                    }
-                }
-            }
+            return Self::fnm_oauth_credentials_from(&fnm_versions);
         }
 
-        // 3c. fnm-managed Node (Unix): scan ~/.local/share/fnm/node-versions/*
+        None
+    }
+
+    #[cfg(not(windows))]
+    fn fnm_oauth_credentials() -> Option<OAuthClientCredentials> {
         #[cfg(not(windows))]
         if let Some(data_dir) = dirs::data_dir() {
             let fnm_versions = data_dir.join("fnm").join("node-versions");
-            if fnm_versions.is_dir()
-                && let Ok(entries) = std::fs::read_dir(&fnm_versions)
-            {
-                for entry in entries.flatten() {
-                    let candidate = entry
-                        .path()
-                        .join("installation")
-                        .join("lib")
-                        .join("node_modules")
-                        .join("@google")
-                        .join("gemini-cli-core")
-                        .join("dist")
-                        .join("src")
-                        .join("code_assist")
-                        .join("oauth2.js");
-                    if let Some(creds) = Self::try_extract_oauth_from_js(&candidate) {
-                        return Ok(creds);
-                    }
-                }
-            }
+            return Self::fnm_oauth_credentials_from(&fnm_versions);
         }
 
-        // 4. Fall back to environment variables
+        None
+    }
+
+    fn fnm_oauth_credentials_from(fnm_versions: &Path) -> Option<OAuthClientCredentials> {
+        if !fnm_versions.is_dir() {
+            return None;
+        }
+
+        let entries = std::fs::read_dir(fnm_versions).ok()?;
+        let candidates = entries
+            .flatten()
+            .map(|entry| {
+                entry
+                    .path()
+                    .join("installation")
+                    .join("lib")
+                    .join("node_modules")
+            })
+            .map(|node_modules| node_modules.join(Self::oauth_subpath()));
+
+        Self::oauth_credentials_from_candidates(candidates)
+    }
+
+    fn oauth_credentials_from_env() -> Result<OAuthClientCredentials, ProviderError> {
         let client_id = std::env::var("GEMINI_CLIENT_ID")
             .map_err(|_| ProviderError::NotInstalled("GEMINI_CLIENT_ID not set. Install Gemini CLI or set GEMINI_CLIENT_ID/GEMINI_CLIENT_SECRET.".to_string()))?;
         let client_secret = std::env::var("GEMINI_CLIENT_SECRET")
