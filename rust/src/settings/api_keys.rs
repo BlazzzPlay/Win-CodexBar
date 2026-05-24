@@ -224,17 +224,6 @@ pub fn get_api_key_providers() -> Vec<ProviderConfigInfo> {
             dashboard_url: Some("https://ai.azure.com"),
         },
         ProviderConfigInfo {
-            id: ProviderId::T3Chat,
-            name: "T3 Chat",
-            requires_api_key: false,
-            api_key_env_var: None,
-            api_key_help: Some(
-                "Uses T3 Chat browser cookies. Paste a full browser cURL if cookie-only refreshes hit a Vercel challenge.",
-            ),
-            config_file_path: None,
-            dashboard_url: Some("https://t3.chat/settings/customization"),
-        },
-        ProviderConfigInfo {
             id: ProviderId::OpenRouter,
             name: "OpenRouter",
             requires_api_key: true,

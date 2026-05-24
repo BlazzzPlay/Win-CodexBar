@@ -172,6 +172,17 @@ fn test_api_key_provider_catalog_includes_token_providers() {
 }
 
 #[test]
+fn test_t3_chat_is_cookie_configured_not_api_key_configured() {
+    let providers = get_api_key_providers();
+    assert!(
+        !providers
+            .iter()
+            .any(|provider| provider.id == ProviderId::T3Chat),
+        "T3 Chat fetches usage from browser cookies or pasted cURL, not API keys"
+    );
+}
+
+#[test]
 fn test_refresh_interval_options() {
     let options = get_refresh_interval_options();
     assert!(!options.is_empty());
