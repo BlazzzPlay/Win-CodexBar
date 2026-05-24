@@ -2,13 +2,13 @@
 setlocal
 
 set "VERSION="
-for /f tokens^=3^ delims^=^" %%A in ('findstr /b /c:"version = " rust\Cargo.toml') do (
+for /f "tokens=3" %%A in ('findstr /b /c:"version = " rust\Cargo.toml') do (
   if not defined VERSION set "VERSION=%%A"
 )
 
 if not defined VERSION (
   echo Failed to determine version from rust\Cargo.toml
-  exit /b 1
+  exit 1
 )
 
 set "ASSETS_DIR=C:\code\Win-CodexBar-release\assets"
@@ -28,5 +28,5 @@ for %%F in (
   )
 )
 
-if "%MISSING%"=="1" exit /b 1
-exit /b 0
+if "%MISSING%"=="1" exit 1
+exit 0

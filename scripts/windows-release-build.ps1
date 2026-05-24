@@ -215,17 +215,12 @@ try {
 
     $tauriBuildLog = Join-Path $AssetsDir "tauri-build.log"
     Write-Host "Running Tauri build. Full log: $tauriBuildLog"
-    & $pnpm.Source @(
-        "--dir", "apps\desktop-tauri",
-        "exec",
-        "tauri",
-        "build",
-        "--no-bundle"
-    ) *> $tauriBuildLog
+    $tauriBuildCommand = 'pnpm --dir apps\desktop-tauri exec tauri build --no-bundle > "' + $tauriBuildLog + '" 2>&1'
+    & cmd.exe /d /s /c $tauriBuildCommand
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Tauri build failed with exit code $LASTEXITCODE. Last 300 log lines:"
         Get-Content $tauriBuildLog -Tail 300
-        throw "$($pnpm.Source) exited with code $LASTEXITCODE"
+        throw "pnpm tauri build exited with code $LASTEXITCODE"
     }
 
     $releaseBinDir = if ($env:CARGO_BUILD_TARGET) {
