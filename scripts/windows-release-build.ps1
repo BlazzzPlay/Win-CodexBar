@@ -168,7 +168,7 @@ try {
         $env:CARGO_BUILD_TARGET = "x86_64-pc-windows-msvc"
     }
     if ($env:CARGO_BUILD_TARGET -and $rustup) {
-        $toolchain = if ($env:RUSTUP_TOOLCHAIN) { $env:RUSTUP_TOOLCHAIN } else { "stable-x86_64-pc-windows-msvc" }
+        $toolchain = "stable-x86_64-pc-windows-msvc"
         & $rustup.Source toolchain install $toolchain --profile minimal
         if ($LASTEXITCODE -ne 0) {
             throw "$($rustup.Source) toolchain install exited with code $LASTEXITCODE"
