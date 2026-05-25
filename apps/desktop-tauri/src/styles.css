@@ -1919,11 +1919,18 @@ html {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  flex-wrap: wrap;
   margin-bottom: 6px;
 }
 
 .provider-detail-section__header h4 {
   margin-bottom: 0;
+}
+
+.provider-detail-section__header .credential-btn {
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
 }
 
 .provider-detail-grid--storage {
