@@ -14,7 +14,6 @@ $cargoBin = Join-Path $env:USERPROFILE ".cargo\bin"
 $rustVersion = "1.95.0"
 $rustDistDate = "2026-04-16"
 $rustHost = "x86_64-pc-windows-msvc"
-$rustupInitChecksum = "86478e53f769379d7f0ebfa7c9aa97cb76ca92233f79aa2cc0dbee2efaac73c7"
 $rustRoot = Join-Path $env:USERPROFILE ".rust-ms\$rustVersion"
 $rustBin = Join-Path $rustRoot "bin"
 
@@ -158,42 +157,17 @@ function Install-RustToolchain {
         return
     }
 
-    Write-Host "Installing Rust with verified rustup-init..."
-    $downloadDir = Join-Path $env:TEMP "win-codexbar-rustup"
-    New-Item -ItemType Directory -Force $downloadDir | Out-Null
-    $rustupInit = Join-Path $downloadDir "rustup-init.exe"
-    Receive-File `
-        -Name "rustup-init-x86_64-pc-windows-msvc" `
-        -Url "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe" `
-        -Destination $rustupInit
-
-    $actual = Get-FileSha256 $rustupInit
-    if ($actual -ne $rustupInitChecksum) {
-        throw "rustup-init SHA-256 mismatch. Expected $rustupInitChecksum, got $actual"
+    Write-Host "Installing Rust MSVC through Chocolatey rust-ms..."
+    choco install rust-ms --version=$rustVersion -y --no-progress --limit-output
+    if ($LASTEXITCODE -ne 0) {
+        throw "rust-ms install failed with exit code $LASTEXITCODE"
     }
 
-    $rustupArgs = @(
-        "-y",
-        "--default-toolchain", "$rustVersion-$rustHost",
-        "--profile", "minimal",
-        "--no-modify-path"
-    )
-    $rustupProcess = Start-Process `
-        -FilePath $rustupInit `
-        -ArgumentList $rustupArgs `
-        -NoNewWindow `
-        -PassThru
-
-    if (-not $rustupProcess.WaitForExit(240000)) {
-        Write-Host "rustup-init exceeded 240s; stopping it and checking whether cargo/rustc were installed..."
-        Stop-Process -Id $rustupProcess.Id -Force -ErrorAction SilentlyContinue
-    } elseif ($rustupProcess.ExitCode -ne 0) {
-        throw "rustup-init failed with exit code $($rustupProcess.ExitCode)"
-    }
-
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
+        [System.Environment]::GetEnvironmentVariable("Path", "User")
     Add-RustPath
     if (-not ((Test-Command "cargo") -and (Test-Command "rustc"))) {
-        throw "Missing cargo/rustc after rustup-init install."
+        throw "Missing cargo/rustc after rust-ms install."
     }
 }
 
