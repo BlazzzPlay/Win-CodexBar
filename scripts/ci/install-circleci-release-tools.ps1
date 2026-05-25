@@ -39,6 +39,41 @@ function Add-CargoPath {
     }
 }
 
+function Invoke-ProcessWithTimeout {
+    param(
+        [string]$FilePath,
+        [string[]]$Arguments,
+        [int]$TimeoutSeconds,
+        [string]$Description
+    )
+
+    $stdout = Join-Path $env:TEMP "$Description.stdout.log"
+    $stderr = Join-Path $env:TEMP "$Description.stderr.log"
+    Remove-Item $stdout, $stderr -ErrorAction SilentlyContinue
+
+    $process = Start-Process `
+        -FilePath $FilePath `
+        -ArgumentList $Arguments `
+        -RedirectStandardOutput $stdout `
+        -RedirectStandardError $stderr `
+        -NoNewWindow `
+        -PassThru
+
+    if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        if (Test-Path $stdout) { Get-Content $stdout | Write-Host }
+        if (Test-Path $stderr) { Get-Content $stderr | Write-Host }
+        throw "$Description timed out after $TimeoutSeconds seconds"
+    }
+
+    if (Test-Path $stdout) { Get-Content $stdout | Write-Host }
+    if (Test-Path $stderr) { Get-Content $stderr | Write-Host }
+
+    if ($process.ExitCode -ne 0) {
+        throw "$Description failed with exit code $($process.ExitCode)"
+    }
+}
+
 function Install-MinimalRustupToolchain {
     Write-Host "Ensuring minimal Rust MSVC toolchain..."
 
@@ -59,11 +94,19 @@ function Install-MinimalRustupToolchain {
         }
         Write-Host "rustup-init SHA-256 verified."
 
-        Write-Host "Installing rustup without a default toolchain..."
-        & $rustupInit -y --no-modify-path --profile minimal --default-toolchain none
-        if ($LASTEXITCODE -ne 0) {
-            throw "rustup-init failed with exit code $LASTEXITCODE"
-        }
+        Write-Host "Installing minimal stable MSVC toolchain through rustup-init..."
+        Invoke-ProcessWithTimeout `
+            -FilePath $rustupInit `
+            -Arguments @(
+                "-v",
+                "-y",
+                "--no-modify-path",
+                "--profile", "minimal",
+                "--default-host", "x86_64-pc-windows-msvc",
+                "--default-toolchain", "stable-x86_64-pc-windows-msvc"
+            ) `
+            -TimeoutSeconds 300 `
+            -Description "rustup-init"
 
         Add-CargoPath
     }
