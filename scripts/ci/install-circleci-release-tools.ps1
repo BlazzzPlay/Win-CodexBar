@@ -4,7 +4,6 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $env:CARGO_TERM_COLOR = "never"
 $env:CARGO_TERM_PROGRESS_WHEN = "never"
-$env:RUSTUP_INIT_SKIP_PATH_CHECK = "yes"
 $env:NO_COLOR = "1"
 trap {
     Write-Host $_
@@ -12,9 +11,7 @@ trap {
 }
 
 $cargoBin = Join-Path $env:USERPROFILE ".cargo\bin"
-if (Test-Path $cargoBin) {
-    $env:Path = "$cargoBin;$env:Path"
-}
+$rustMsBin = Join-Path $env:ChocolateyInstall "lib\rust-ms\tools\bin"
 
 function Test-Command {
     param([string]$Name)
@@ -33,45 +30,33 @@ function Install-ChocoPackages {
     choco install @Packages -y --no-progress
 }
 
-function Add-CargoPath {
+function Add-RustPath {
     if (Test-Path $cargoBin) {
         $env:Path = "$cargoBin;$env:Path"
     }
+    if (Test-Path $rustMsBin) {
+        $env:Path = "$rustMsBin;$env:Path"
+    }
 }
 
-function Install-MinimalRustupToolchain {
-    Write-Host "Ensuring minimal Rust MSVC toolchain..."
+Add-RustPath
 
-    if (-not (Test-Command "rustup")) {
-        Write-Host "Installing rustup through Chocolatey..."
-        choco install rustup.install --version=1.27.1 -y --no-progress
-        if ($LASTEXITCODE -ne 0) {
-            throw "rustup.install failed with exit code $LASTEXITCODE"
-        }
-
-        Add-CargoPath
+function Install-RustToolchain {
+    Write-Host "Ensuring Rust MSVC toolchain..."
+    if ((Test-Command "cargo") -and (Test-Command "rustc")) {
+        Write-Host "Rust toolchain already available."
+        return
     }
 
-    Write-Host "Removing default Rust toolchain before minimal reinstall..."
-    rustup toolchain uninstall stable-x86_64-pc-windows-msvc
+    Write-Host "Installing rust-ms through Chocolatey..."
+    choco install rust-ms --version=1.95.0 -y --no-progress
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "Warning: default stable MSVC uninstall failed with exit code $LASTEXITCODE"
+        throw "rust-ms failed with exit code $LASTEXITCODE"
     }
 
-    Write-Host "Installing/updating minimal stable MSVC toolchain..."
-    rustup set profile minimal
-    if ($LASTEXITCODE -ne 0) {
-        throw "rustup set profile failed with exit code $LASTEXITCODE"
-    }
-
-    rustup toolchain install stable-x86_64-pc-windows-msvc --profile minimal --no-self-update
-    if ($LASTEXITCODE -ne 0) {
-        throw "rustup toolchain install failed with exit code $LASTEXITCODE"
-    }
-
-    rustup default stable-x86_64-pc-windows-msvc
-    if ($LASTEXITCODE -ne 0) {
-        throw "rustup default failed with exit code $LASTEXITCODE"
+    Add-RustPath
+    if (-not ((Test-Command "cargo") -and (Test-Command "rustc"))) {
+        throw "Missing cargo/rustc after rust-ms install."
     }
 }
 
@@ -94,9 +79,9 @@ Install-ChocoPackages $packages
 
 $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
     [System.Environment]::GetEnvironmentVariable("Path", "User")
-Add-CargoPath
+Add-RustPath
 
-Install-MinimalRustupToolchain
+Install-RustToolchain
 
 if (Test-Command "rustup") {
     rustup set auto-self-update disable
@@ -104,7 +89,7 @@ if (Test-Command "rustup") {
         Write-Host "Warning: rustup auto-self-update disable failed with exit code $LASTEXITCODE"
     }
 } else {
-    throw "Missing rustup after install/cache restore."
+    Write-Host "rustup is not installed; rust-ms provides cargo/rustc directly."
 }
 
 $env:CARGO_BUILD_TARGET = "x86_64-pc-windows-msvc"
