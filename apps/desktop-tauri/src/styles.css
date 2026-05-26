@@ -2983,6 +2983,32 @@ body:has(.tray-panel-reveal) {
   background-clip: padding-box;
 }
 
+.menu-surface--popout .provider-grid {
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 9px 4px;
+  padding: 8px 8px 7px;
+}
+
+.menu-surface--popout .provider-grid--sparse {
+  grid-template-columns: repeat(auto-fit, 42px);
+  justify-content: start;
+  gap: 8px 7px;
+}
+
+.menu-surface--popout .provider-grid--sparse .provider-grid__item {
+  width: 42px;
+}
+
+.menu-surface--popout .provider-grid--sparse .provider-grid__label {
+  max-width: 42px;
+}
+
+.menu-surface--popout .provider-grid__divider {
+  height: 1px;
+  margin: 2px 0 6px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .menu-surface--popout .menu-stack {
   flex: 0 0 auto;
   max-height: none;

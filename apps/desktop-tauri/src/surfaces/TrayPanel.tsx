@@ -14,8 +14,7 @@ import MenuSurface, {
   type MenuFooterRow,
 } from "../components/MenuSurface";
 import UpdateBanner from "../components/UpdateBanner";
-import { ProviderIcon } from "../components/providers/ProviderIcon";
-import { getProviderIcon } from "../components/providers/providerIcons";
+import ProviderGrid from "../components/ProviderGrid";
 import { openProviderDashboard, openProviderStatusPage } from "../lib/tauri";
 import { DEMO_ENABLED, DEMO_PROVIDERS } from "../lib/demoProviders";
 
@@ -305,16 +304,6 @@ export default function TrayPanel({ state }: { state: BootstrapState }) {
     },
     [],
   );
-  const gridPercent = useCallback(
-    (provider: ProviderUsageSnapshot) => {
-      const pct = settings.showAsUsed
-        ? provider.primary.usedPercent
-        : provider.primary.remainingPercent;
-      return Math.max(0, Math.min(100, pct));
-    },
-    [settings.showAsUsed],
-  );
-
   const banner = (
     <UpdateBanner
       updateState={updateState}
@@ -356,44 +345,12 @@ export default function TrayPanel({ state }: { state: BootstrapState }) {
       banner={banner}
       footerRows={footerRows}
     >
-      <div
-        className={`provider-grid${
-          providers.length + 1 <= 6 ? " provider-grid--sparse" : ""
-        }`}
-      >
-        {/* Overview button — first item like macOS */}
-        <button
-          type="button"
-          className={`provider-grid__item${selectedProviderId === null ? " provider-grid__item--active" : ""}`}
-          onClick={() => handleGridClick(null)}
-          title="Overview"
-        >
-          <span className="provider-grid__icon-overview">⊞</span>
-          <span className="provider-grid__label">All</span>
-        </button>
-        {providers.map((p) => (
-          <button
-            key={p.providerId}
-            type="button"
-            className={`provider-grid__item${p.providerId === selectedProviderId ? " provider-grid__item--active" : ""}`}
-            onClick={() => handleGridClick(p.providerId)}
-            title={p.displayName}
-          >
-            <ProviderIcon providerId={p.providerId} size={16} />
-            <span className="provider-grid__label">{p.displayName}</span>
-            {/* Weekly indicator bar — matches macOS ProviderSwitcherView */}
-            {!p.error && (
-              <span
-                className="provider-grid__weekly-track"
-                style={{
-                  "--weekly-pct": `${gridPercent(p)}%`,
-                  "--weekly-color": getProviderIcon(p.providerId).brandColor,
-                } as React.CSSProperties}
-              />
-            )}
-          </button>
-        ))}
-      </div>
+      <ProviderGrid
+        providers={providers}
+        selectedProviderId={selectedProviderId}
+        showAsUsed={settings.showAsUsed}
+        onSelect={handleGridClick}
+      />
       <div className="provider-grid__divider" />
       <div className="menu-stack">
         {visibleProviders.map((p, idx) => {

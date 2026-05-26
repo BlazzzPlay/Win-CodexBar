@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWindow, LogicalPosition, LogicalSize } from "@tauri-apps/api/window";
 import type { BootstrapState, ProviderUsageSnapshot } from "../types/bridge";
 import { setSurfaceMode, openSettingsWindow, quitApp as quitApplication } from "../lib/tauri";
@@ -8,11 +8,11 @@ import { useUpdateState } from "../hooks/useUpdateState";
 import { useLocale } from "../hooks/useLocale";
 import MenuCard from "../components/MenuCard";
 import MenuSurface, {
-  MenuSummary,
   MenuEmpty,
   type MenuFooterRow,
 } from "../components/MenuSurface";
 import UpdateBanner from "../components/UpdateBanner";
+import ProviderGrid from "../components/ProviderGrid";
 import { DEMO_ENABLED, DEMO_PROVIDERS } from "../lib/demoProviders";
 
 /** Sort: highest primary used% first, then alphabetical by name. */
@@ -42,7 +42,6 @@ export default function PopOutPanel({
     providers: realProviders,
     isRefreshing,
     refresh,
-    lastRefresh,
     hasCachedData,
   } = useProviders();
   const providers = DEMO_ENABLED ? DEMO_PROVIDERS : realProviders;
@@ -54,11 +53,27 @@ export default function PopOutPanel({
   const sorted = useMemo(() => {
     return sortProviders(providers);
   }, [providers]);
-  const cardRefs = useRef(new Map<string, HTMLDivElement>());
-  const errorCount = useMemo(
-    () => sorted.filter((p) => p.error !== null).length,
-    [sorted],
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(
+    providerId ?? null,
   );
+  const cardRefs = useRef(new Map<string, HTMLDivElement>());
+
+  useEffect(() => {
+    setSelectedProviderId(providerId ?? null);
+  }, [providerId]);
+
+  const visibleProviders = useMemo(
+    () => {
+      if (selectedProviderId === null) return sorted;
+      const match = sorted.find((p) => p.providerId === selectedProviderId);
+      return match ? [match] : sorted;
+    },
+    [sorted, selectedProviderId],
+  );
+
+  const handleGridClick = useCallback((nextProviderId: string | null) => {
+    setSelectedProviderId(nextProviderId);
+  }, []);
 
   useEffect(() => {
     const win = getCurrentWindow();
@@ -85,7 +100,7 @@ export default function PopOutPanel({
   }, []);
 
   useEffect(() => {
-    if (!providerId || sorted.length === 0) return;
+    if (!providerId || selectedProviderId !== providerId || sorted.length === 0) return;
 
     let cancelled = false;
     const scrollToProvider = () => {
@@ -120,7 +135,7 @@ export default function PopOutPanel({
       window.clearTimeout(timer);
       window.clearTimeout(lateTimer);
     };
-  }, [providerId, sorted]);
+  }, [providerId, selectedProviderId, sorted]);
 
   const openSettings = useCallback(() => {
     openSettingsWindow("general");
@@ -205,36 +220,37 @@ export default function PopOutPanel({
       actions={headerActions}
       banner={banner}
       footerRows={footerRows}
-      summary={
-        <MenuSummary
-          total={sorted.length}
-          errorCount={errorCount}
-          isRefreshing={isRefreshing}
-          lastRefresh={lastRefresh}
-        />
-      }
     >
+      <ProviderGrid
+        providers={providers}
+        selectedProviderId={selectedProviderId}
+        showAsUsed={settings.showAsUsed}
+        onSelect={handleGridClick}
+      />
+      <div className="provider-grid__divider" />
       <div className="menu-stack">
-        {sorted.map((p, idx) => (
-          <div
-            key={p.providerId}
-            className="menu-stack__item"
-            ref={(node) => {
-              if (node) {
-                cardRefs.current.set(p.providerId, node);
-              } else {
-                cardRefs.current.delete(p.providerId);
-              }
-            }}
-          >
+        {visibleProviders.map((p, idx) => (
+          <Fragment key={p.providerId}>
             {idx > 0 && <div className="menu-stack__sep" />}
-            <MenuCard
-              provider={p}
-              hideEmail={settings.hidePersonalInfo}
-              resetTimeRelative={settings.resetTimeRelative}
-              showAsUsed={settings.showAsUsed}
-            />
-          </div>
+            <div
+              className={`menu-stack__item${selectedProviderId === p.providerId ? " menu-stack__item--selected" : ""}`}
+              ref={(node) => {
+                if (node) {
+                  cardRefs.current.set(p.providerId, node);
+                } else {
+                  cardRefs.current.delete(p.providerId);
+                }
+              }}
+            >
+              <MenuCard
+                provider={p}
+                hideEmail={settings.hidePersonalInfo}
+                resetTimeRelative={settings.resetTimeRelative}
+                showAsUsed={settings.showAsUsed}
+                compactMetrics={selectedProviderId === null}
+              />
+            </div>
+          </Fragment>
         ))}
       </div>
     </MenuSurface>

@@ -173,18 +173,18 @@ describe("PopOutPanel", () => {
     eventMocks.listen.mockResolvedValue(() => {});
   });
 
-  it("keeps the full provider stack when opened for a provider target", async () => {
+  it("shows the provider grid and focuses provider targets", async () => {
     const { container } = renderPopOut(
       [provider("codex", "Codex", 80), provider("claude", "Claude", 30)],
       "claude",
     );
 
     await waitFor(() => {
-      expect(container.querySelectorAll(".menu-stack__item")).toHaveLength(2);
+      expect(container.querySelectorAll(".provider-grid__item")).toHaveLength(3);
     });
 
-    expect(await screen.findByText("2 providers")).toBeInTheDocument();
-    expect(screen.getByText("Codex")).toBeInTheDocument();
-    expect(screen.getByText("Claude")).toBeInTheDocument();
+    expect(container.querySelector(".provider-grid__item--active")?.getAttribute("title")).toBe("Claude");
+    expect(screen.getAllByText("Claude").length).toBeGreaterThanOrEqual(2);
+    expect(container.querySelectorAll(".menu-stack__item")).toHaveLength(1);
   });
 });
