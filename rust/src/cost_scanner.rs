@@ -50,6 +50,19 @@ impl ModelTokenCounts {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+struct TokenCounts {
+    input: u64,
+    cached: u64,
+    output: u64,
+}
+
+impl TokenCounts {
+    fn total(&self) -> u64 {
+        self.input + self.cached + self.output
+    }
+}
+
 impl CostSummary {
     pub fn format_total(&self) -> String {
         format!("${:.2}", self.total_cost_usd)
@@ -271,62 +284,64 @@ impl CostScanner {
 
         let reader = BufReader::new(file);
         let mut current_model = String::from("gpt-4o");
+        let mut previous_totals: Option<TokenCounts> = None;
         let mut session_cost = 0.0;
         let mut has_tokens = false;
 
         for line in reader.lines().map_while(Result::ok) {
             if let Ok(event) = serde_json::from_str::<serde_json::Value>(&line) {
-                // Check for model in turn_context
                 if let Some(model) = event.get("model").and_then(|m| m.as_str()) {
                     current_model = model.to_string();
                 }
-
-                // Check for token_count events
-                if let Some(event_msg) = event.get("event_msg")
-                    && event_msg.get("type").and_then(|t| t.as_str()) == Some("token_count")
+                if event.get("type").and_then(|t| t.as_str()) == Some("turn_context")
+                    && let Some(model) = event
+                        .get("payload")
+                        .and_then(|payload| payload.get("model"))
+                        .or_else(|| {
+                            event
+                                .get("payload")
+                                .and_then(|payload| payload.get("info"))
+                                .and_then(|info| info.get("model"))
+                        })
+                        .and_then(|m| m.as_str())
                 {
-                    let input = event_msg
-                        .get("input_tokens")
-                        .and_then(|t| t.as_u64())
-                        .unwrap_or(0);
-                    let cached = event_msg
-                        .get("cached_input_tokens")
-                        .and_then(|t| t.as_u64())
-                        .unwrap_or(0);
-                    let output = event_msg
-                        .get("output_tokens")
-                        .and_then(|t| t.as_u64())
-                        .unwrap_or(0);
+                    current_model = model.to_string();
+                }
 
-                    summary.input_tokens += input;
+                if let Some((tokens, model)) =
+                    codex_token_counts_from_event(&event, &current_model, &mut previous_totals)
+                {
+                    if tokens.total() == 0 {
+                        continue;
+                    }
+
+                    let cached = tokens.cached.min(tokens.input);
+                    summary.input_tokens += tokens.input;
                     summary.cached_tokens += cached;
-                    summary.output_tokens += output;
+                    summary.output_tokens += tokens.output;
 
-                    let cost = CodexPricing::cost_usd(&current_model, input, cached, output);
+                    let cost = CodexPricing::cost_usd(&model, tokens.input, cached, tokens.output);
                     session_cost += cost;
                     has_tokens = true;
 
-                    *summary.by_model.entry(current_model.clone()).or_insert(0.0) += cost;
-                    let speed_bucket = codex_speed_bucket(&current_model);
+                    *summary.by_model.entry(model.clone()).or_insert(0.0) += cost;
+                    let speed_bucket = codex_speed_bucket(&model);
                     *summary
                         .by_speed
                         .entry(speed_bucket.to_string())
                         .or_insert(0.0) += cost;
 
-                    let model_tokens = summary
-                        .by_model_tokens
-                        .entry(current_model.clone())
-                        .or_default();
-                    model_tokens.input_tokens += input;
-                    model_tokens.output_tokens += output;
+                    let model_tokens = summary.by_model_tokens.entry(model).or_default();
+                    model_tokens.input_tokens += tokens.input;
+                    model_tokens.output_tokens += tokens.output;
                     model_tokens.cached_tokens += cached;
 
                     let speed_tokens = summary
                         .by_speed_tokens
                         .entry(speed_bucket.to_string())
                         .or_default();
-                    speed_tokens.input_tokens += input;
-                    speed_tokens.output_tokens += output;
+                    speed_tokens.input_tokens += tokens.input;
+                    speed_tokens.output_tokens += tokens.output;
                     speed_tokens.cached_tokens += cached;
                 }
             }
@@ -431,6 +446,72 @@ impl CostScanner {
     }
 }
 
+fn codex_token_counts_from_event(
+    event: &serde_json::Value,
+    current_model: &str,
+    previous_totals: &mut Option<TokenCounts>,
+) -> Option<(TokenCounts, String)> {
+    let token_payload =
+        current_codex_token_payload(event).or_else(|| legacy_codex_token_payload(event))?;
+    let info = token_payload.get("info");
+    let model = info
+        .and_then(|value| value.get("model").or_else(|| value.get("model_name")))
+        .or_else(|| token_payload.get("model"))
+        .or_else(|| event.get("model"))
+        .and_then(|value| value.as_str())
+        .unwrap_or(current_model)
+        .to_string();
+
+    if let Some(total) = info.and_then(|value| value.get("total_token_usage")) {
+        let totals = token_counts_from_value(total);
+        let previous = previous_totals.unwrap_or_default();
+        *previous_totals = Some(totals);
+        return Some((
+            TokenCounts {
+                input: totals.input.saturating_sub(previous.input),
+                cached: totals.cached.saturating_sub(previous.cached),
+                output: totals.output.saturating_sub(previous.output),
+            },
+            model,
+        ));
+    }
+
+    if let Some(last) = info.and_then(|value| value.get("last_token_usage")) {
+        return Some((token_counts_from_value(last), model));
+    }
+
+    Some((token_counts_from_value(token_payload), model))
+}
+
+fn current_codex_token_payload(event: &serde_json::Value) -> Option<&serde_json::Value> {
+    let payload = event.get("payload")?;
+    (event.get("type").and_then(|value| value.as_str()) == Some("event_msg")
+        && payload.get("type").and_then(|value| value.as_str()) == Some("token_count"))
+    .then_some(payload)
+}
+
+fn legacy_codex_token_payload(event: &serde_json::Value) -> Option<&serde_json::Value> {
+    let event_msg = event.get("event_msg")?;
+    (event_msg.get("type").and_then(|value| value.as_str()) == Some("token_count"))
+        .then_some(event_msg)
+}
+
+fn token_counts_from_value(value: &serde_json::Value) -> TokenCounts {
+    TokenCounts {
+        input: token_u64(value, "input_tokens"),
+        cached: value
+            .get("cached_input_tokens")
+            .or_else(|| value.get("cache_read_input_tokens"))
+            .and_then(|value| value.as_u64())
+            .unwrap_or(0),
+        output: token_u64(value, "output_tokens"),
+    }
+}
+
+fn token_u64(value: &serde_json::Value, key: &str) -> u64 {
+    value.get(key).and_then(|value| value.as_u64()).unwrap_or(0)
+}
+
 /// Check if any cost usage sources are available
 #[allow(dead_code)]
 pub fn has_cost_usage_sources() -> bool {
@@ -510,6 +591,7 @@ fn scan_codex_file_cost(path: &PathBuf) -> f64 {
 
     let reader = BufReader::new(file);
     let mut current_model = String::from("gpt-4o");
+    let mut previous_totals: Option<TokenCounts> = None;
     let mut total_cost = 0.0;
 
     for line in reader.lines().map_while(Result::ok) {
@@ -517,24 +599,34 @@ fn scan_codex_file_cost(path: &PathBuf) -> f64 {
             if let Some(model) = event.get("model").and_then(|m| m.as_str()) {
                 current_model = model.to_string();
             }
-
-            if let Some(event_msg) = event.get("event_msg")
-                && event_msg.get("type").and_then(|t| t.as_str()) == Some("token_count")
+            if event.get("type").and_then(|t| t.as_str()) == Some("turn_context")
+                && let Some(model) = event
+                    .get("payload")
+                    .and_then(|payload| payload.get("model"))
+                    .or_else(|| {
+                        event
+                            .get("payload")
+                            .and_then(|payload| payload.get("info"))
+                            .and_then(|info| info.get("model"))
+                    })
+                    .and_then(|m| m.as_str())
             {
-                let input = event_msg
-                    .get("input_tokens")
-                    .and_then(|t| t.as_u64())
-                    .unwrap_or(0);
-                let cached = event_msg
-                    .get("cached_input_tokens")
-                    .and_then(|t| t.as_u64())
-                    .unwrap_or(0);
-                let output = event_msg
-                    .get("output_tokens")
-                    .and_then(|t| t.as_u64())
-                    .unwrap_or(0);
+                current_model = model.to_string();
+            }
 
-                total_cost += CodexPricing::cost_usd(&current_model, input, cached, output);
+            if let Some((tokens, model)) =
+                codex_token_counts_from_event(&event, &current_model, &mut previous_totals)
+            {
+                if tokens.total() == 0 {
+                    continue;
+                }
+
+                total_cost += CodexPricing::cost_usd(
+                    &model,
+                    tokens.input,
+                    tokens.cached.min(tokens.input),
+                    tokens.output,
+                );
             }
         }
     }
@@ -545,6 +637,7 @@ fn scan_codex_file_cost(path: &PathBuf) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
 
     #[test]
     fn test_codex_pricing() {
@@ -565,5 +658,38 @@ mod tests {
         assert_eq!(codex_speed_bucket("gpt-5.5-fast"), "fast");
         assert_eq!(codex_speed_bucket("gpt-5.3-codex-spark"), "fast");
         assert_eq!(codex_speed_bucket("gpt-5-codex"), "standard");
+    }
+
+    #[test]
+    fn parses_current_codex_payload_token_count_events() {
+        let path = std::env::temp_dir().join(format!(
+            "codexbar-current-codex-token-count-{}.jsonl",
+            std::process::id()
+        ));
+        let mut file = File::create(&path).unwrap();
+        writeln!(
+            file,
+            r#"{{"timestamp":"2026-05-27T17:12:48.000Z","type":"event_msg","payload":{{"type":"token_count","info":{{"model":"gpt-5","total_token_usage":{{"input_tokens":125,"cached_input_tokens":30,"output_tokens":15}}}}}}}}"#
+        )
+        .unwrap();
+        drop(file);
+
+        let scanner = CostScanner::new(30);
+        let mut summary = CostSummary::default();
+        scanner.parse_codex_file(&path, &mut summary);
+
+        assert_eq!(summary.sessions_count, 1);
+        assert_eq!(summary.input_tokens, 125);
+        assert_eq!(summary.cached_tokens, 30);
+        assert_eq!(summary.output_tokens, 15);
+        assert_eq!(
+            summary
+                .by_model_tokens
+                .get("gpt-5")
+                .map(ModelTokenCounts::total),
+            Some(170)
+        );
+        assert!(scan_codex_file_cost(&path) > 0.0);
+        let _ = std::fs::remove_file(&path);
     }
 }
