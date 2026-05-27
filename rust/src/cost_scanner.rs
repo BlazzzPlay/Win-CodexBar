@@ -9,6 +9,8 @@ use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
+use crate::core::CostUsagePricing;
+
 /// Cost summary from scanning local logs
 #[derive(Debug, Clone, Default)]
 pub struct CostSummary {
@@ -87,7 +89,10 @@ struct CodexPricing;
 
 impl CodexPricing {
     fn cost_usd(model: &str, input: u64, cached: u64, output: u64) -> f64 {
-        // Default to GPT-4o pricing
+        if let Some(cost) = CostUsagePricing::codex_cost_usd(model, input, cached, output) {
+            return cost;
+        }
+
         let (input_price, cached_price, output_price) = match model.to_lowercase().as_str() {
             m if m.contains("gpt-4o-mini") => (0.15, 0.075, 0.60),
             m if m.contains("gpt-4o") => (2.50, 1.25, 10.00),
@@ -98,7 +103,9 @@ impl CodexPricing {
             _ => (2.50, 1.25, 10.00), // Default to GPT-4o
         };
 
-        let input_cost = (input as f64 / 1_000_000.0) * input_price;
+        let cached = cached.min(input);
+        let non_cached = input.saturating_sub(cached);
+        let input_cost = (non_cached as f64 / 1_000_000.0) * input_price;
         let cached_cost = (cached as f64 / 1_000_000.0) * cached_price;
         let output_cost = (output as f64 / 1_000_000.0) * output_price;
 
@@ -644,6 +651,16 @@ mod tests {
         // Test GPT-4o pricing: $2.50/1M input, $10/1M output
         let cost = CodexPricing::cost_usd("gpt-4o", 1_000_000, 0, 1_000_000);
         assert!((cost - 12.50).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_codex_pricing_uses_gpt55_standard_short_context_rates() {
+        let cost = CodexPricing::cost_usd("gpt-5.5", 1_000_000, 400_000, 1_000_000);
+
+        // GPT-5.5 standard short-context pricing:
+        // 600k non-cached input at $5/M, 400k cached input at $0.50/M,
+        // and 1M output at $30/M.
+        assert!((cost - 33.20).abs() < 0.01);
     }
 
     #[test]
