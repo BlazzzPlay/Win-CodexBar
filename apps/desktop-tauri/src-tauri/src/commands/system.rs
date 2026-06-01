@@ -269,6 +269,15 @@ pub fn quit_app(app: tauri::AppHandle) {
 }
 
 fn dashboard_url_for_provider(provider_id: &str) -> Option<String> {
+    if provider_id == ProviderId::MiniMax.cli_name() {
+        let settings = Settings::load();
+        return Some(
+            codexbar::providers::MiniMaxProvider::dashboard_url_for_region(Some(
+                settings.api_region(ProviderId::MiniMax),
+            )),
+        );
+    }
+
     if let Some(url) = codexbar::settings::get_api_key_providers()
         .into_iter()
         .find(|p| p.id.cli_name() == provider_id)

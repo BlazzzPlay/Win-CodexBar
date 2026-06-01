@@ -56,7 +56,7 @@ pub(crate) fn build_fetch_context(
                 // Try browser cookie extraction as fallback when no manual cookie is set.
                 // On non-Windows this is a harmless no-op that returns an error.
                 let cookie_header = active_token_cookie.or(stored_cookie).or_else(|| {
-                    id.cookie_domain().and_then(|domain| {
+                    provider_cookie_domain(id, settings).and_then(|domain| {
                         codexbar::browser::cookies::get_cookie_header(domain)
                             .ok()
                             .filter(|h| !h.is_empty())
@@ -74,14 +74,27 @@ pub(crate) fn build_fetch_context(
         .or(active_token_api_key);
 
     let workspace_id = settings.workspace_id(id).trim().to_string();
+    let api_region = settings.api_region(id).trim().to_string();
 
     FetchContext {
         source_mode,
         manual_cookie_header: cookie_header,
         api_key,
         workspace_id: (!workspace_id.is_empty()).then_some(workspace_id),
+        api_region: (!api_region.is_empty()).then_some(api_region),
         ..FetchContext::default()
     }
+}
+
+pub(crate) fn provider_cookie_domain(id: ProviderId, settings: &Settings) -> Option<&'static str> {
+    if id == ProviderId::MiniMax {
+        return Some(
+            codexbar::providers::MiniMaxProvider::cookie_domain_for_region(Some(
+                settings.api_region(id),
+            )),
+        );
+    }
+    id.cookie_domain()
 }
 
 const DEFAULT_PROVIDER_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(35);

@@ -175,6 +175,9 @@ async fn collect_provider_diagnostic(
         workspace_id: settings
             .provider_config(provider_id)
             .and_then(|config| config.workspace_id.clone()),
+        api_region: settings
+            .provider_config(provider_id)
+            .and_then(|config| config.api_region.clone()),
     };
 
     let fetch_result = provider.fetch_usage(&ctx).await;

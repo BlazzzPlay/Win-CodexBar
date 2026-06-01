@@ -241,7 +241,7 @@ impl ProviderId {
             ProviderId::Kiro => Some("kiro.dev"),
             ProviderId::Kimi => Some("kimi.moonshot.cn"),
             ProviderId::KimiK2 => Some("platform.moonshot.cn"),
-            ProviderId::MiniMax => Some("platform.minimaxi.com"),
+            ProviderId::MiniMax => Some("platform.minimax.io"),
             ProviderId::OpenCode => Some("opencode.ai"),
             ProviderId::Augment => Some("app.augmentcode.com"),
             ProviderId::Amp => Some("sourcegraph.com"),
@@ -451,6 +451,9 @@ pub struct FetchContext {
 
     /// Optional provider workspace/project scope from persisted settings.
     pub workspace_id: Option<String>,
+
+    /// Optional provider API/web region from persisted settings.
+    pub api_region: Option<String>,
 }
 
 impl Default for FetchContext {
@@ -463,6 +466,7 @@ impl Default for FetchContext {
             manual_cookie_header: None,
             api_key: None,
             workspace_id: None,
+            api_region: None,
         }
     }
 }

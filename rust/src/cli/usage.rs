@@ -197,6 +197,7 @@ fn build_usage_fetch_context(args: &UsageArgs, source_mode: SourceMode) -> Fetch
         manual_cookie_header: None,
         api_key: None,
         workspace_id: None,
+        api_region: None,
     }
 }
 

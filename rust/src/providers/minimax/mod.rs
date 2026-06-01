@@ -20,7 +20,8 @@ use crate::core::{
     ProviderMetadata, RateWindow, SourceMode, UsageSnapshot,
 };
 
-const BILLING_HISTORY_URL: &str = "https://platform.minimaxi.com/account/amount";
+const CODING_PLAN_PATH: &str = "/user-center/payment/coding-plan";
+const CODING_PLAN_QUERY: &str = "cycle_type=3";
 
 #[derive(Debug, Deserialize)]
 struct MiniMaxBillingHistoryPayload {
@@ -70,10 +71,69 @@ struct MiniMaxBillingBreakdown {
 }
 
 /// MiniMax API region
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum MiniMaxRegion {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MiniMaxRegion {
     Global,
     ChinaMainland,
+}
+
+impl MiniMaxRegion {
+    pub fn from_settings_value(value: Option<&str>) -> Self {
+        match value.unwrap_or_default().trim().to_lowercase().as_str() {
+            "cn" | "china" | "china-mainland" | "china_mainland" | "mainland" => {
+                Self::ChinaMainland
+            }
+            _ => Self::Global,
+        }
+    }
+
+    pub fn settings_value(self) -> &'static str {
+        match self {
+            Self::Global => "global",
+            Self::ChinaMainland => "cn",
+        }
+    }
+
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::Global => "Global (platform.minimax.io)",
+            Self::ChinaMainland => "China mainland (platform.minimaxi.com)",
+        }
+    }
+
+    pub fn base_url(self) -> &'static str {
+        match self {
+            Self::Global => "https://platform.minimax.io",
+            Self::ChinaMainland => "https://platform.minimaxi.com",
+        }
+    }
+
+    pub fn api_base_url(self) -> &'static str {
+        match self {
+            Self::Global => "https://api.minimax.io",
+            Self::ChinaMainland => "https://api.minimaxi.com",
+        }
+    }
+
+    pub fn cookie_domain(self) -> &'static str {
+        match self {
+            Self::Global => "platform.minimax.io",
+            Self::ChinaMainland => "platform.minimaxi.com",
+        }
+    }
+
+    pub fn coding_plan_url(self) -> String {
+        format!(
+            "{}{}?{}",
+            self.base_url(),
+            CODING_PLAN_PATH,
+            CODING_PLAN_QUERY
+        )
+    }
+
+    fn billing_history_url(self) -> String {
+        format!("{}/account/amount", self.base_url())
+    }
 }
 
 /// MiniMax provider
@@ -93,10 +153,24 @@ impl MiniMaxProvider {
                 supports_credits: true,
                 default_enabled: false,
                 is_primary: false,
-                dashboard_url: Some("https://platform.minimaxi.com/user-center"),
+                dashboard_url: Some(
+                    "https://platform.minimax.io/user-center/payment/coding-plan?cycle_type=3",
+                ),
                 status_page_url: None,
             },
         }
+    }
+
+    pub fn region_from_settings(value: Option<&str>) -> MiniMaxRegion {
+        MiniMaxRegion::from_settings_value(value)
+    }
+
+    pub fn dashboard_url_for_region(value: Option<&str>) -> String {
+        Self::region_from_settings(value).coding_plan_url()
+    }
+
+    pub fn cookie_domain_for_region(value: Option<&str>) -> &'static str {
+        Self::region_from_settings(value).cookie_domain()
     }
 
     /// Get MiniMax config directory
@@ -152,26 +226,16 @@ impl MiniMaxProvider {
         Err(ProviderError::AuthRequired)
     }
 
-    /// API base URLs for different regions
-    fn api_base_url(region: MiniMaxRegion) -> &'static str {
-        match region {
-            MiniMaxRegion::Global => "https://api.minimax.io",
-            MiniMaxRegion::ChinaMainland => "https://api.minimaxi.com",
-        }
-    }
-
     /// Fetch usage via MiniMax API with region fallback
-    async fn fetch_via_web(&self) -> Result<ProviderFetchResult, ProviderError> {
+    async fn fetch_via_web(
+        &self,
+        region: MiniMaxRegion,
+    ) -> Result<ProviderFetchResult, ProviderError> {
         let (group_id, api_key) = self.read_api_key().await?;
 
-        // Try global endpoint first, fall back to China mainland on 401/403
-        match self
-            .fetch_from_region(&group_id, &api_key, MiniMaxRegion::Global)
-            .await
-        {
+        match self.fetch_from_region(&group_id, &api_key, region).await {
             Ok(result) => Ok(result),
-            Err(ProviderError::AuthRequired) => {
-                // Retry with China mainland endpoint
+            Err(ProviderError::AuthRequired) if region == MiniMaxRegion::Global => {
                 self.fetch_from_region(&group_id, &api_key, MiniMaxRegion::ChinaMainland)
                     .await
             }
@@ -191,7 +255,7 @@ impl MiniMaxProvider {
             .build()
             .map_err(|e| ProviderError::Other(e.to_string()))?;
 
-        let base_url = Self::api_base_url(region);
+        let base_url = region.api_base_url();
         let resp = client
             .get(format!(
                 "{}/v1/billing/usage?group_id={}",
@@ -282,6 +346,7 @@ impl MiniMaxProvider {
     async fn fetch_billing_with_cookie(
         &self,
         cookie_header: &str,
+        region: MiniMaxRegion,
     ) -> Result<ProviderFetchResult, ProviderError> {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
@@ -289,8 +354,8 @@ impl MiniMaxProvider {
             .map_err(|e| ProviderError::Other(e.to_string()))?;
 
         let response = client
-            .get(BILLING_HISTORY_URL)
-            .query(&[("page", "1"), ("limit", "100")])
+            .get(region.billing_history_url())
+            .query(&[("page", "1"), ("limit", "100"), ("aggregate", "false")])
             .header("Cookie", cookie_header)
             .header("Accept", "application/json, text/plain, */*")
             .header("X-Requested-With", "XMLHttpRequest")
@@ -648,15 +713,16 @@ impl Provider for MiniMaxProvider {
 
     async fn fetch_usage(&self, ctx: &FetchContext) -> Result<ProviderFetchResult, ProviderError> {
         tracing::debug!("Fetching MiniMax usage");
+        let region = MiniMaxRegion::from_settings_value(ctx.api_region.as_deref());
 
         match ctx.source_mode {
             SourceMode::Auto => {
                 if let Some(cookie_header) = ctx.manual_cookie_header.as_deref()
-                    && let Ok(result) = self.fetch_billing_with_cookie(cookie_header).await
+                    && let Ok(result) = self.fetch_billing_with_cookie(cookie_header, region).await
                 {
                     return Ok(result);
                 }
-                if let Ok(result) = self.fetch_via_web().await {
+                if let Ok(result) = self.fetch_via_web(region).await {
                     return Ok(result);
                 }
                 let usage = self.probe_cli().await?;
@@ -664,9 +730,9 @@ impl Provider for MiniMaxProvider {
             }
             SourceMode::Web => {
                 if let Some(cookie_header) = ctx.manual_cookie_header.as_deref() {
-                    return self.fetch_billing_with_cookie(cookie_header).await;
+                    return self.fetch_billing_with_cookie(cookie_header, region).await;
                 }
-                self.fetch_via_web().await
+                self.fetch_via_web(region).await
             }
             SourceMode::Cli => {
                 let usage = self.probe_cli().await?;
@@ -692,6 +758,36 @@ impl Provider for MiniMaxProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn minimax_region_defaults_to_global_io_urls() {
+        let region = MiniMaxRegion::from_settings_value(None);
+        assert_eq!(region, MiniMaxRegion::Global);
+        assert_eq!(region.settings_value(), "global");
+        assert_eq!(region.cookie_domain(), "platform.minimax.io");
+        assert_eq!(
+            region.coding_plan_url(),
+            "https://platform.minimax.io/user-center/payment/coding-plan?cycle_type=3"
+        );
+        assert_eq!(
+            MiniMaxProvider::dashboard_url_for_region(None),
+            "https://platform.minimax.io/user-center/payment/coding-plan?cycle_type=3"
+        );
+    }
+
+    #[test]
+    fn minimax_region_accepts_legacy_china_value() {
+        for value in ["cn", "china", "china-mainland", "china_mainland"] {
+            let region = MiniMaxRegion::from_settings_value(Some(value));
+            assert_eq!(region, MiniMaxRegion::ChinaMainland);
+            assert_eq!(region.settings_value(), "cn");
+            assert_eq!(region.cookie_domain(), "platform.minimaxi.com");
+            assert_eq!(
+                region.coding_plan_url(),
+                "https://platform.minimaxi.com/user-center/payment/coding-plan?cycle_type=3"
+            );
+        }
+    }
 
     #[test]
     fn aggregates_billing_history_records() {

@@ -58,6 +58,15 @@ pub(crate) fn build_provider_detail(provider_id: &str) -> Result<ProviderDetail,
 
     let provider = instantiate_provider(id);
     let metadata = provider.metadata();
+    let dashboard_url = if id == codexbar::core::ProviderId::MiniMax {
+        Some(
+            codexbar::providers::MiniMaxProvider::dashboard_url_for_region(Some(
+                settings.api_region(id),
+            )),
+        )
+    } else {
+        metadata.dashboard_url.map(|s| s.to_string())
+    };
 
     Ok(ProviderDetail {
         id: id.cli_name().to_string(),
@@ -77,12 +86,12 @@ pub(crate) fn build_provider_detail(provider_id: &str) -> Result<ProviderDetail,
         cost: None,
         pace: None,
         last_error: None,
-        dashboard_url: metadata.dashboard_url.map(|s| s.to_string()),
+        dashboard_url: dashboard_url.clone(),
         status_page_url: metadata.status_page_url.map(|s| s.to_string()),
         // Buy-credits currently mirrors the dashboard URL for providers that
         // support credit top-ups; refine once a dedicated URL lands upstream.
         buy_credits_url: if metadata.supports_credits {
-            metadata.dashboard_url.map(|s| s.to_string())
+            dashboard_url
         } else {
             None
         },

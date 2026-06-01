@@ -151,7 +151,17 @@ fn region_provider(provider_id: &str) -> Option<codexbar::core::ProviderId> {
 }
 
 pub(crate) fn provider_region_lookup(settings: &Settings, provider_id: &str) -> Option<String> {
-    region_provider(provider_id).map(|id| settings.api_region(id).to_string())
+    region_provider(provider_id).map(|id| {
+        if id == codexbar::core::ProviderId::MiniMax {
+            codexbar::providers::MiniMaxProvider::region_from_settings(Some(
+                settings.api_region(id),
+            ))
+            .settings_value()
+            .to_string()
+        } else {
+            settings.api_region(id).to_string()
+        }
+    })
 }
 
 pub(crate) fn provider_region_set(
@@ -477,11 +487,15 @@ pub fn region_options_for(provider_id: &str) -> Vec<RegionOption> {
         "minimax" => vec![
             RegionOption {
                 value: "global".to_string(),
-                label: "Global (.io)".to_string(),
+                label: codexbar::providers::MiniMaxRegion::Global
+                    .display_name()
+                    .to_string(),
             },
             RegionOption {
-                value: "china".to_string(),
-                label: "China Mainland (.com)".to_string(),
+                value: "cn".to_string(),
+                label: codexbar::providers::MiniMaxRegion::ChinaMainland
+                    .display_name()
+                    .to_string(),
             },
         ],
         _ => Vec::new(),
