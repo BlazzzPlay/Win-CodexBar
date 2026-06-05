@@ -32,7 +32,13 @@ pub fn reveal_tray_panel_window(
 ) -> Result<(), String> {
     use tauri::Manager;
 
-    if state.lock().unwrap().surface_machine.current() != SurfaceMode::TrayPanel {
+    if state
+        .lock()
+        .map_err(|e| e.to_string())?
+        .surface_machine
+        .current()
+        != SurfaceMode::TrayPanel
+    {
         return Ok(());
     }
 
@@ -53,23 +59,27 @@ pub fn close_settings_window(
 }
 
 #[tauri::command]
-pub fn get_current_surface_mode(state: tauri::State<'_, Mutex<AppState>>) -> String {
-    state
+pub fn get_current_surface_mode(
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<String, String> {
+    Ok(state
         .lock()
-        .unwrap()
+        .map_err(|e| e.to_string())?
         .surface_machine
         .current()
         .as_str()
-        .to_string()
+        .to_string())
 }
 
 #[tauri::command]
-pub fn get_current_surface_state(state: tauri::State<'_, Mutex<AppState>>) -> CurrentSurfaceState {
-    let guard = state.lock().unwrap();
-    CurrentSurfaceState {
+pub fn get_current_surface_state(
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<CurrentSurfaceState, String> {
+    let guard = state.lock().map_err(|e| e.to_string())?;
+    Ok(CurrentSurfaceState {
         mode: guard.surface_machine.current().as_str().to_string(),
         target: guard.current_target.clone(),
-    }
+    })
 }
 
 #[tauri::command]
