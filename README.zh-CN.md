@@ -24,6 +24,11 @@
 - **CLI** — `codexbar usage`、`codexbar cost`、`codexbar config` 和本机回环 `codexbar serve`，便于脚本化、本地集成和 CI
 - **WSL 支持** — CLI 开箱即用，桌面壳层通过 WSLg 运行
 
+## v0.33.1 更新内容
+
+- 当 GitHub Copilot 返回超额预算时，现在会显示真实百分比，例如 `115% used`，而不是强行压到 `100%`。
+- 进度条仍然保持满格显示，避免 UI 溢出；托盘、弹出面板、Provider 侧栏和设置详情都会保留真实超额数值。
+
 ## v0.33.0 更新内容
 
 - 将上游 CodexBar v0.33.0 的 provider 与成本统计修复移植到 Win-CodexBar。

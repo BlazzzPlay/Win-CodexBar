@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## [Windows] 0.33.1 - 2026-06-11
+
+### Fixed
+- Show GitHub Copilot over-budget quota values when GitHub reports negative remaining quota, such as displaying `115% used` instead of clamping to `100%`.
+- Keep Copilot progress bars visually capped at full width while preserving the true overage percentage in tray, pop-out, provider sidebar, and settings details.
 
 ---
 
