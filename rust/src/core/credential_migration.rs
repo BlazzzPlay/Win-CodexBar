@@ -325,7 +325,6 @@ const PROVIDER_ACCOUNT_NAMES: &[(ProviderId, &str)] = &[
     (ProviderId::Kimi, "kimi-cookie"),
     (ProviderId::KimiK2, "kimik2-cookie"),
     (ProviderId::Amp, "amp-cookie"),
-    (ProviderId::Synthetic, "synthetic-cookie"),
     (ProviderId::JetBrains, "jetbrains-token"),
     (ProviderId::Alibaba, "alibaba-cookie"),
     (ProviderId::Warp, "warp-token"),

@@ -20,7 +20,6 @@ export const TEST_PROVIDER_CATALOG: Array<[string, string]> = [
   ["azureopenai", "Azure OpenAI"],
   ["t3chat", "T3 Chat"],
   ["openrouter", "OpenRouter"],
-  ["synthetic", "Synthetic"],
   ["jetbrains", "JetBrains AI"],
   ["alibaba", "Alibaba"],
   ["alibabatokenplan", "Alibaba Token Plan"],

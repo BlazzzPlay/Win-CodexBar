@@ -38,7 +38,6 @@ import opencodego from "./icons/ProviderIcon-opencodego.svg?raw";
 import openrouter from "./icons/ProviderIcon-openrouter.svg?raw";
 import perplexity from "./icons/ProviderIcon-perplexity.svg?raw";
 import stepfun from "./icons/ProviderIcon-stepfun.svg?raw";
-import synthetic from "./icons/ProviderIcon-synthetic.svg?raw";
 import t3chat from "./icons/ProviderIcon-t3chat.svg?raw";
 import venice from "./icons/ProviderIcon-venice.svg?raw";
 import vertexai from "./icons/ProviderIcon-vertexai.svg?raw";
@@ -107,7 +106,6 @@ const RAW: Record<string, string> = {
   openrouter: tint(openrouter),
   perplexity: tint(perplexity),
   stepfun: tint(stepfun),
-  synthetic: tint(synthetic),
   t3chat: tint(t3chat),
   venice: tint(venice),
   vertexai: tint(vertexai),
@@ -155,7 +153,6 @@ export const PROVIDER_ICON_REGISTRY: Record<string, ProviderIcon> = {
   opencodego:  { id: "opencodego",  brandColor: "#3b82f6", fallbackLetter: "○", svgPath: RAW.opencodego },
   openrouter:  { id: "openrouter",  brandColor: "#6b7280", fallbackLetter: "R", svgPath: RAW.openrouter },
   perplexity:  { id: "perplexity",  brandColor: "#1fb8cd", fallbackLetter: "P", svgPath: RAW.perplexity },
-  synthetic:   { id: "synthetic",   brandColor: "#141414", fallbackLetter: "◇", svgPath: RAW.synthetic },
   vertexai:    { id: "vertexai",    brandColor: "#4285f4", fallbackLetter: "△", svgPath: RAW.vertexai },
   warp:        { id: "warp",        brandColor: "#6366f1", fallbackLetter: "W", svgPath: RAW.warp },
   windsurf:    { id: "windsurf",    brandColor: "#22c55e", fallbackLetter: "W", svgPath: RAW.windsurf },

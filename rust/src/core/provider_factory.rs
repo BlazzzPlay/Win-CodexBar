@@ -16,8 +16,8 @@ use crate::providers::{
     LLMProxyProvider, LiteLLMProvider, ManusProvider, MiMoProvider, MiniMaxProvider,
     MistralProvider, NanoGPTProvider, OllamaProvider, OpenAIApiProvider, OpenCodeGoProvider,
     OpenCodeProvider, OpenRouterProvider, PerplexityProvider, PoeProvider, StepFunProvider,
-    SyntheticProvider, T3ChatProvider, VeniceProvider, VertexAIProvider, WarpProvider,
-    WindsurfProvider, ZaiProvider, ZedProvider,
+    T3ChatProvider, VeniceProvider, VertexAIProvider, WarpProvider, WindsurfProvider, ZaiProvider,
+    ZedProvider,
 };
 
 /// Instantiate the concrete [`Provider`] implementation for a given [`ProviderId`].
@@ -47,7 +47,6 @@ pub fn instantiate(id: ProviderId) -> Box<dyn Provider> {
         ProviderId::AzureOpenAI => Box::new(AzureOpenAIProvider::new()),
         ProviderId::T3Chat => Box::new(T3ChatProvider::new()),
         ProviderId::OpenRouter => Box::new(OpenRouterProvider::new()),
-        ProviderId::Synthetic => Box::new(SyntheticProvider::new()),
         ProviderId::JetBrains => Box::new(JetBrainsProvider::new()),
         ProviderId::Alibaba => Box::new(AlibabaProvider::new()),
         ProviderId::AlibabaTokenPlan => Box::new(AlibabaTokenPlanProvider::new()),

@@ -32,7 +32,6 @@ pub enum ProviderId {
     AzureOpenAI,
     T3Chat,
     OpenRouter,
-    Synthetic,
     JetBrains,
     Alibaba,
     AlibabaTokenPlan,
@@ -92,7 +91,6 @@ impl ProviderId {
             ProviderId::AzureOpenAI,
             ProviderId::T3Chat,
             ProviderId::OpenRouter,
-            ProviderId::Synthetic,
             ProviderId::JetBrains,
             ProviderId::Alibaba,
             ProviderId::AlibabaTokenPlan,
@@ -152,7 +150,6 @@ impl ProviderId {
             ProviderId::AzureOpenAI => "azureopenai",
             ProviderId::T3Chat => "t3chat",
             ProviderId::OpenRouter => "openrouter",
-            ProviderId::Synthetic => "synthetic",
             ProviderId::JetBrains => "jetbrains",
             ProviderId::Alibaba => "alibaba",
             ProviderId::AlibabaTokenPlan => "alibabatokenplan",
@@ -212,7 +209,6 @@ impl ProviderId {
             ProviderId::AzureOpenAI => "Azure OpenAI",
             ProviderId::T3Chat => "T3 Chat",
             ProviderId::OpenRouter => "OpenRouter",
-            ProviderId::Synthetic => "Synthetic",
             ProviderId::JetBrains => "JetBrains AI",
             ProviderId::Alibaba => "Alibaba",
             ProviderId::AlibabaTokenPlan => "Alibaba Token Plan",
@@ -285,7 +281,6 @@ impl ProviderId {
             ProviderId::Zai => None,
             ProviderId::VertexAI => None,
             ProviderId::JetBrains => None,
-            ProviderId::Synthetic => None,
             ProviderId::Warp => None,
             ProviderId::AzureOpenAI => None,
             ProviderId::OpenRouter => None,
@@ -337,7 +332,6 @@ impl ProviderId {
             "azureopenai" | "azure-openai" | "azure openai" => Some(ProviderId::AzureOpenAI),
             "t3chat" | "t3-chat" | "t3 chat" => Some(ProviderId::T3Chat),
             "openrouter" | "or" => Some(ProviderId::OpenRouter),
-            "synthetic" => Some(ProviderId::Synthetic),
             "jetbrains" | "jetbrains-ai" | "jetbrains ai" | "intellij" => {
                 Some(ProviderId::JetBrains)
             }
@@ -602,7 +596,7 @@ mod tests {
     #[test]
     fn test_provider_id_all() {
         let all = ProviderId::all();
-        assert_eq!(all.len(), 54);
+        assert_eq!(all.len(), 53);
         assert!(all.contains(&ProviderId::Claude));
         assert!(all.contains(&ProviderId::Codex));
         assert!(all.contains(&ProviderId::Kimi));
@@ -610,7 +604,6 @@ mod tests {
         assert!(all.contains(&ProviderId::Amp));
         assert!(all.contains(&ProviderId::AzureOpenAI));
         assert!(all.contains(&ProviderId::T3Chat));
-        assert!(all.contains(&ProviderId::Synthetic));
         assert!(all.contains(&ProviderId::JetBrains));
         assert!(all.contains(&ProviderId::AlibabaTokenPlan));
         assert!(all.contains(&ProviderId::NanoGPT));

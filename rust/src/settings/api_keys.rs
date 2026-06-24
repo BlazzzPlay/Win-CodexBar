@@ -160,15 +160,6 @@ pub fn get_api_key_providers() -> Vec<ProviderConfigInfo> {
             dashboard_url: Some("https://sourcegraph.com/cody/manage"),
         },
         ProviderConfigInfo {
-            id: ProviderId::Synthetic,
-            name: "Synthetic",
-            requires_api_key: true,
-            api_key_env_var: Some("SYNTHETIC_API_KEY"),
-            api_key_help: Some("Get your API key from Synthetic → Account → API Keys"),
-            config_file_path: Some("~/.synthetic/config.json"),
-            dashboard_url: Some("https://synthetic.computer/account"),
-        },
-        ProviderConfigInfo {
             id: ProviderId::Copilot,
             name: "GitHub Copilot (legacy token)",
             requires_api_key: true,

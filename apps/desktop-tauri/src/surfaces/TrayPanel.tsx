@@ -36,7 +36,7 @@ const HAS_DASHBOARD = new Set([
   "infini", "jetbrains", "kilo", "kimi", "kimik2", "kiro", "manus",
   "mimo", "minimax", "mistral", "nanogpt", "ollama", "openaiapi",
   "opencode", "opencodego", "openrouter", "perplexity", "stepfun",
-  "synthetic", "t3chat", "venice", "vertexai", "warp", "windsurf",
+  "t3chat", "venice", "vertexai", "warp", "windsurf",
   "zai",
 ]);
 /** Provider IDs that have a status page URL in the backend */

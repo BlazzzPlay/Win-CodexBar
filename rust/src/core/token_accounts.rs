@@ -191,7 +191,6 @@ impl TokenAccountSupport {
             | ProviderId::VertexAI
             | ProviderId::Kimi
             | ProviderId::KimiK2
-            | ProviderId::Synthetic
             | ProviderId::JetBrains
             | ProviderId::Warp
             | ProviderId::AzureOpenAI

@@ -52,7 +52,6 @@ export type ProofProviderId =
   | "azureopenai"
   | "t3chat"
   | "openrouter"
-  | "synthetic"
   | "jetbrains"
   | "alibaba"
   | "alibabatokenplan"
@@ -159,7 +158,6 @@ export interface SettingsSnapshot {
   menuBarShowsHighestUsage: boolean;
   menuBarShowsPercent: boolean;
   showAsUsed: boolean;
-  showCreditsExtraUsage: boolean;
   showAllTokenAccountsInMenu: boolean;
   enableAnimations: boolean;
   resetTimeRelative: boolean;
@@ -173,7 +171,6 @@ export interface SettingsSnapshot {
   theme: ThemePreference;
   claudeAvoidKeychainPrompts: boolean;
   disableKeychainAccess: boolean;
-  showDebugSettings: boolean;
   providerMetrics: Record<string, MetricPreference>;
   floatBarEnabled: boolean;
   /** 30..=100 — clamped server-side. */
@@ -207,7 +204,6 @@ export interface SettingsUpdate {
   menuBarShowsHighestUsage?: boolean;
   menuBarShowsPercent?: boolean;
   showAsUsed?: boolean;
-  showCreditsExtraUsage?: boolean;
   showAllTokenAccountsInMenu?: boolean;
   enableAnimations?: boolean;
   resetTimeRelative?: boolean;
@@ -221,7 +217,6 @@ export interface SettingsUpdate {
   theme?: ThemePreference;
   claudeAvoidKeychainPrompts?: boolean;
   disableKeychainAccess?: boolean;
-  showDebugSettings?: boolean;
   /** Map of provider CLI name → metric preference label. */
   providerMetrics?: Record<string, MetricPreference>;
   floatBarEnabled?: boolean;

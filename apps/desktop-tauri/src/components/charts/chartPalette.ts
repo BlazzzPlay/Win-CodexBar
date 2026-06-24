@@ -31,7 +31,6 @@ const PROVIDER_TOKEN: Record<string, string> = {
   "vertex ai": "--chart-vertexai",
   zai: "--chart-zai",
   "z.ai": "--chart-zai",
-  synthetic: "--chart-synthetic",
   alibaba: "--chart-alibaba",
   tongyi: "--chart-alibaba",
   nanogpt: "--chart-nanogpt",
