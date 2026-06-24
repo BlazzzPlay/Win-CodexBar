@@ -90,7 +90,7 @@ function metricOptions(
   if (provider.tertiary) {
     options.push({ value: "tertiary", label: t("DetailWindowTertiary") });
   }
-  if (provider.id === "cursor") {
+  if (provider.id === "cursor" || provider.extraRateWindows.length > 0) {
     options.push({ value: "extraUsage", label: t("ExtraUsage") });
   }
   if (provider.id === "gemini" && provider.weekly) {

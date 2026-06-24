@@ -588,7 +588,10 @@ fn selected_metric_percent(
             .map(|w| w.used_percent)
             .or_else(|| snapshot.secondary.as_ref().map(|w| w.used_percent))
             .or(Some(snapshot.primary.used_percent)),
-        MetricPreference::Credits | MetricPreference::ExtraUsage => cost_metric_percent(snapshot),
+        MetricPreference::Credits => cost_metric_percent(snapshot),
+        MetricPreference::ExtraUsage => {
+            extra_rate_window_percent(snapshot).or_else(|| cost_metric_percent(snapshot))
+        }
         MetricPreference::Average => average_metric_percent(snapshot),
     }
 }
@@ -617,7 +620,7 @@ fn automatic_metric_percent(
         Some(ProviderId::Copilot) => max_metric_percent([
             Some(snapshot.primary.used_percent),
             snapshot.secondary.as_ref().map(|w| w.used_percent),
-            None,
+            extra_rate_window_percent(snapshot),
         ]),
         _ => Some(snapshot.primary.used_percent),
     }
@@ -635,6 +638,14 @@ fn cost_metric_percent(snapshot: &crate::commands::ProviderUsageSnapshot) -> Opt
         return None;
     }
     Some(((cost.used / limit) * 100.0).clamp(0.0, 100.0))
+}
+
+fn extra_rate_window_percent(snapshot: &crate::commands::ProviderUsageSnapshot) -> Option<f64> {
+    snapshot
+        .extra_rate_windows
+        .iter()
+        .map(|extra| extra.window.used_percent)
+        .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
 }
 
 fn max_metric_percent<const N: usize>(values: [Option<f64>; N]) -> Option<f64> {
@@ -998,6 +1009,23 @@ mod tests {
         fake_snapshot_with(id, display, used_percent, None, None, None)
     }
 
+    fn fake_extra_window(percent: f64) -> crate::commands::NamedRateWindowSnapshot {
+        crate::commands::NamedRateWindowSnapshot {
+            id: "additional_budget".to_string(),
+            title: "Additional Budget".to_string(),
+            window: crate::commands::RateWindowSnapshot {
+                used_percent: percent,
+                remaining_percent: 100.0 - percent,
+                window_minutes: None,
+                resets_at: None,
+                reset_description: None,
+                is_exhausted: false,
+                reserve_percent: None,
+                reserve_description: None,
+            },
+        }
+    }
+
     #[test]
     fn pick_tray_provider_highest_picks_max_primary() {
         let a = fake_snapshot("codex", "Codex", 30.0);
@@ -1140,6 +1168,30 @@ mod tests {
 
         assert_eq!(primary, 15.0);
         assert_eq!(secondary, Some(20.0));
+    }
+
+    #[test]
+    fn selected_tray_percent_tracks_extra_rate_window() {
+        let mut settings = Settings::default();
+        settings.set_provider_metric(ProviderId::Copilot, MetricPreference::ExtraUsage);
+        let mut snapshot = fake_snapshot("copilot", "Copilot", 20.0);
+        snapshot.extra_rate_windows.push(fake_extra_window(42.0));
+
+        let (primary, secondary) = selected_tray_percents(&snapshot, &settings);
+
+        assert_eq!(primary, 42.0);
+        assert_eq!(secondary, None);
+    }
+
+    #[test]
+    fn copilot_automatic_tracks_highest_extra_rate_window() {
+        let settings = Settings::default();
+        let mut snapshot = fake_snapshot("copilot", "Copilot", 20.0);
+        snapshot.extra_rate_windows.push(fake_extra_window(42.0));
+
+        let (primary, _) = selected_tray_percents(&snapshot, &settings);
+
+        assert_eq!(primary, 42.0);
     }
 
     #[test]
