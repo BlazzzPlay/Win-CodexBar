@@ -230,8 +230,10 @@ fn main() {
                     // On Windows, the tray click can cause a spurious blur before
                     // the window fully acquires focus.
                     if let Some(st) = window.app_handle().try_state::<Mutex<AppState>>()
-                        && let Some(shown_at) = st.lock().unwrap().last_shown_at
-                        && shown_at.elapsed() < Duration::from_millis(500)
+                        && st.lock().unwrap().was_tray_panel_recently_shown(
+                            std::time::Instant::now(),
+                            Duration::from_millis(500),
+                        )
                     {
                         return;
                     }

@@ -85,6 +85,23 @@ fn tray_reveal_fallback_only_for_hidden_tray_panel() {
 }
 
 #[test]
+fn tray_show_grace_is_based_on_actual_show_time() {
+    let mut state = AppState::new();
+    let shown_at = std::time::Instant::now();
+
+    state.mark_tray_panel_shown(shown_at);
+
+    assert!(state.was_tray_panel_recently_shown(
+        shown_at + std::time::Duration::from_millis(20),
+        std::time::Duration::from_millis(500),
+    ));
+    assert!(!state.was_tray_panel_recently_shown(
+        shown_at + std::time::Duration::from_millis(500),
+        std::time::Duration::from_millis(500),
+    ));
+}
+
+#[test]
 fn immediate_tray_click_consumes_blur_dismissal() {
     let mut state = AppState::new();
     let dismissed_at = std::time::Instant::now();

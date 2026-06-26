@@ -51,15 +51,26 @@ fn schedule_tray_panel_reveal_fallback(app: &AppHandle) {
                 return;
             };
             let visible = window.is_visible().unwrap_or(false);
-            if should_force_tray_panel_reveal(current, visible)
-                && let Err(error) = show_window(&window)
-            {
-                tracing::debug!("shell: tray reveal fallback show failed: {error}");
+            if should_force_tray_panel_reveal(current, visible) {
+                match show_window(&window) {
+                    Ok(()) => mark_tray_panel_shown(&app_on_main),
+                    Err(error) => {
+                        tracing::debug!("shell: tray reveal fallback show failed: {error}")
+                    }
+                }
             }
         }) {
             tracing::debug!("shell: tray reveal fallback could not run: {error}");
         }
     });
+}
+
+fn mark_tray_panel_shown(app: &AppHandle) {
+    if let Some(state) = app.try_state::<Mutex<AppState>>()
+        && let Ok(mut guard) = state.lock()
+    {
+        guard.mark_tray_panel_shown(std::time::Instant::now());
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -390,9 +401,6 @@ pub(super) fn restore_surface_snapshot(state: &mut AppState, snapshot: &SurfaceS
     if snapshot.mode == SurfaceMode::Hidden {
         let _ = state.hide_surface();
     } else {
-        if snapshot.mode == SurfaceMode::TrayPanel {
-            state.last_shown_at = Some(std::time::Instant::now());
-        }
         let _ = state.transition_surface(snapshot.mode, snapshot.target.clone());
     }
 }
@@ -459,8 +467,9 @@ fn apply_same_mode_target_update(
         },
     )?;
     events::emit_surface_mode_changed(app, mode, mode, target);
-    let _ = window.show();
-    let _ = window.set_focus();
+    if show_window(window).is_ok() && mode == SurfaceMode::TrayPanel {
+        mark_tray_panel_shown(app);
+    }
     proof_harness::sync_after_surface_transition(app);
     Ok(mode)
 }
