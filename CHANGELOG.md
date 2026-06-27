@@ -1,5 +1,14 @@
 # Changelog
 
+## [Windows] 0.37.5 - 2026-06-27
+
+### Fixed
+- Fix Windows desktop startup paths that could leave CodexBar running with only the tiny internal Tauri shell window visible.
+- Reopen the tray panel for normal or blank-argument desktop launches unless **Start Minimized** is enabled.
+- Recover startup tray reveals that remain hidden or stuck at a tiny shell-window size.
+
+---
+
 ## [Windows] 0.37.4 - 2026-06-24
 
 ### Changed
