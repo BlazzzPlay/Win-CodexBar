@@ -59,6 +59,7 @@ fn test_locale_key_spanish() {
     );
 }
 
+#[test]
 fn test_locale_respects_language_setting() {
     // Test that English language returns English strings
     let lang = Language::English;
