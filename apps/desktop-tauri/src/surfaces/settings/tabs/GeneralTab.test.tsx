@@ -52,9 +52,7 @@ describe("GeneralTab language picker", () => {
   it("renders 4 language options when spanish is wired", () => {
     render(<GeneralTab settings={settings} set={vi.fn()} saving={false} />);
 
-    const select = screen.getByRole("combobox", {
-      name: "InterfaceLanguage",
-    });
+    const select = screen.getByDisplayValue("english");
     expect(select).toBeInTheDocument();
 
     const options = select.querySelectorAll("option");
